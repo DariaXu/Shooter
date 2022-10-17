@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "ShooterEditor Editor Win64 Development (Shooter)",
+            "intelliSenseMode": "msvc-x64",
+            "compileCommands": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter.json",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "Win32",
+            "intelliSenseMode": "msvc-x64",
+            "compileCommands": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Default.json",
+            "cStandard": "c17",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
