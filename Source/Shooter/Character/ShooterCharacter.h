@@ -31,6 +31,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 	class UCameraComponent* FollowCamera;
 
+	//  meta = (AllowPrivateAccess = "true") means the blueprint can access private variable from c++ class
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	class UWidgetComponent* OverheadWidget;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
