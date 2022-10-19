@@ -3,6 +3,7 @@
 
 #include "OverheadWidget.h"
 #include "Components/TextBlock.h"
+#include "GameFramework/PlayerState.h"
 
 void UOverheadWidget::SetDisplayText(FString TextToDisplay)
 {
@@ -14,31 +15,48 @@ void UOverheadWidget::SetDisplayText(FString TextToDisplay)
 
 void UOverheadWidget::ShowPlayerNetRole(APawn* InPawn)
 {
-	ENetRole RemoteRole = InPawn->GetRemoteRole();
-	FString Role;
-	switch (RemoteRole)
+	// ENetRole RemoteRole = InPawn->GetRemoteRole();
+	// FString Role;
+	// switch (RemoteRole)
+	// {
+    //     // On the client, the player's "Remote Role" is its Local Role on the server. 
+    //     // On the server, the player's "Remote Role" is its Local Role on the Clien
+	//     case ENetRole::ROLE_Authority:
+    //         // my player on server (local) 
+    //         // client side (remote)
+	// 	    Role = FString("Authority");
+	// 	    break;
+	//     case ENetRole::ROLE_AutonomousProxy:
+    //         // other player character (local)
+    //         //  my player on server side (remote)
+	// 	    Role = FString("Autonomous Proxy");
+	// 	    break;
+	//     case ENetRole::ROLE_SimulatedProxy:
+    //         // my player on client side (local)
+    //         // other player on server side (remote)
+	// 	    Role = FString("Simulated Proxy");
+	// 	    break;
+	//     case ENetRole::ROLE_None:
+	// 	    Role = FString("None");
+	// 	    break;
+	// }
+	// FString RemoteRoleString = FString::Printf(TEXT("Remote Role: %s"), *Role);
+	// SetDisplayText(RemoteRoleString);
+
+
+	// show name
+	FString playerName;
+	APlayerState* PlayerState = InPawn->GetPlayerState();
+	if(PlayerState)
 	{
-	    case ENetRole::ROLE_Authority:
-            // my player on server (local) 
-            // clien side (remote)
-		    Role = FString("Authority");
-		    break;
-	    case ENetRole::ROLE_AutonomousProxy:
-            // other player character (local)
-            //  my player on server side (remote)
-		    Role = FString("Autonomous Proxy");
-		    break;
-	    case ENetRole::ROLE_SimulatedProxy:
-            // my player on client side (local)
-            // other player on server side (remote)
-		    Role = FString("Simulated Proxy");
-		    break;
-	    case ENetRole::ROLE_None:
-		    Role = FString("None");
-		    break;
+		playerName = PlayerState->GetPlayerName();
 	}
-	FString RemoteRoleString = FString::Printf(TEXT("Remote Role: %s"), *Role);
-	SetDisplayText(RemoteRoleString);
+	else
+	{
+		playerName = "Unknown";
+	}
+
+	SetDisplayText(playerName);
 }
 
 void UOverheadWidget::OnLevelRemovedFromWorld(ULevel* InLevel, UWorld* InWorld)
