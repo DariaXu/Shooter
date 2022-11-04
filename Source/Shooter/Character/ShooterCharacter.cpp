@@ -8,6 +8,7 @@
 #include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Shooter/Weapon/Weapon.h"
+#include "Shooter/ShooterComponents/CombatComponent.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -29,6 +30,13 @@ AShooterCharacter::AShooterCharacter()
 
 	OverheadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverheadWidget"));
 	OverheadWidget->SetupAttachment(RootComponent);
+
+	// combat
+	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
+	// components don't need to register to replicated, only set the following bool
+	Combat->SetIsReplicated(true);
+
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 }
 
 // Called when the game starts or when spawned
@@ -43,6 +51,32 @@ void AShooterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+}
+
+// Called to bind functionality to input
+void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+	PlayerInputComponent->BindAxis("MoveForward", this, &AShooterCharacter::MoveForward);
+	PlayerInputComponent->BindAxis("MoveRight", this, &AShooterCharacter::MoveRight);
+	PlayerInputComponent->BindAxis("Turn", this, &AShooterCharacter::Turn);
+	PlayerInputComponent->BindAxis("LookUp", this, &AShooterCharacter::LookUp);
+
+	PlayerInputComponent->BindAction("Equip", IE_Pressed, this, &AShooterCharacter::EquipBtnPressed);
+	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &AShooterCharacter::CrouchBtnPressed);
+	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &AShooterCharacter::AimBtnPressed);
+	PlayerInputComponent->BindAction("Aim", IE_Released, this, &AShooterCharacter::AimBtnReleased);
+}
+
+void AShooterCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	if (Combat)
+	{
+		Combat->Character = this;
+	}
 }
 
 void AShooterCharacter::MoveForward(float Value)
@@ -75,30 +109,60 @@ void AShooterCharacter::LookUp(float Value)
 	AddControllerPitchInput(Value);
 }
 
-void AShooterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
+void AShooterCharacter::EquipBtnPressed()
 {
-	if (OverlappingWeapon)
+	if (Combat) 
 	{
-		OverlappingWeapon->ShowPickupWidget(true);
-	}
-
-	// hide the widget for last overlapping weapon
-	if (LastWeapon)
-	{
-		LastWeapon->ShowPickupWidget(false);
+		if (HasAuthority())
+		{
+			// on server
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else
+		{
+			// on client send RPC
+			ServerEquipButtonPressed();
+		}
+		
 	}
 }
 
-// Called to bind functionality to input
-void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void AShooterCharacter::CrouchBtnPressed()
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}else
+	{
+		Crouch();
+	}
+	
+}
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
-	PlayerInputComponent->BindAxis("MoveForward", this, &AShooterCharacter::MoveForward);
-	PlayerInputComponent->BindAxis("MoveRight", this, &AShooterCharacter::MoveRight);
-	PlayerInputComponent->BindAxis("Turn", this, &AShooterCharacter::Turn);
-	PlayerInputComponent->BindAxis("LookUp", this, &AShooterCharacter::LookUp);
+void AShooterCharacter::AimBtnPressed()
+{
+	if (Combat) 
+	{
+		Combat->SetAiming(true);
+	}
+}
+
+void AShooterCharacter::AimBtnReleased()
+{
+	if (Combat) 
+	{
+		Combat->SetAiming(false);
+	}
+}
+
+// define what happens when the RPC is executed on the server
+void AShooterCharacter::ServerEquipButtonPressed_Implementation()
+{
+	// will only be called on the server
+	if (Combat) 
+	{
+		Combat->EquipWeapon(OverlappingWeapon);
+	}
 }
 
 void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -125,10 +189,37 @@ void AShooterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 	{
 		// IsLocallyControlled() is true only when is called on the charater who is actually being controlled
 		// (this player is the server)
+		// GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Server_overlap"));
 		if (OverlappingWeapon)
 		{
 			OverlappingWeapon->ShowPickupWidget(true);
 		}
 	}
+}
+
+// called on client
+void AShooterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
+{
+	// GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Client_overlap"));
+	if (OverlappingWeapon)
+	{
+		OverlappingWeapon->ShowPickupWidget(true);
+	}
+
+	// hide the widget for last overlapping weapon
+	if (LastWeapon)
+	{
+		LastWeapon->ShowPickupWidget(false);
+	}
+}
+
+bool AShooterCharacter::IsWeaponEquipped()
+{
+	return (Combat && Combat->EquippedWeapon);
+}
+
+bool AShooterCharacter::IsAiming()
+{
+	return (Combat && Combat->bAiming);
 }
 

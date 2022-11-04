@@ -18,11 +18,11 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	virtual void PostInitializeComponents() override;
+
 	// register variable to be replicated
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
-	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients
-	void SetOverlappingWeapon(AWeapon* Weapon);
 
 protected:
 	// Called when the game starts or when spawned
@@ -32,6 +32,11 @@ protected:
 	void MoveRight(float Value);
 	void Turn(float Value);
 	void LookUp(float Value);
+
+	void EquipBtnPressed();
+	void CrouchBtnPressed();
+	void AimBtnPressed();
+	void AimBtnReleased();
 	
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
@@ -51,8 +56,26 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	class AWeapon* OverlappingWeapon;
 	
-	// this function can only have a parameter with the type that being replicated
+	// this function can only have a parameter with the type that being replicated，
+	// will automaticstore the last replicated variable into the parameter before current replication happen
 	UFUNCTION()
 	void OnRep_OverlappingWeapon(AWeapon* LastWeapon);
 
+	UPROPERTY(VisibleAnywhere)
+	class UCombatComponent* Combat;
+
+	// UFUNCTION(Server) is RPCs (Remote Procedure Calls) are functions that are called locally, 
+	// but executed remotely on another machine (separate from the calling machine). 
+	// reliable RPC is guaranty to be called: if sending information from client to server,
+	// reliable allows client to get confirmation when the server receives the RPC;
+	// if didn't get this confirmation, resent the RPC
+	UFUNCTION(Server, Reliable)
+	void ServerEquipButtonPressed();
+
+public:
+	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients
+	void SetOverlappingWeapon(AWeapon* Weapon);
+
+	bool IsWeaponEquipped();
+	bool IsAiming();
 };

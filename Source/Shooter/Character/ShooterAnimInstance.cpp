@@ -4,6 +4,7 @@
 #include "ShooterAnimInstance.h"
 #include "ShooterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 
 void UShooterAnimInstance::NativeInitializeAnimation()
 {
@@ -12,6 +13,7 @@ void UShooterAnimInstance::NativeInitializeAnimation()
 	ShooterCharacter = Cast<AShooterCharacter>(TryGetPawnOwner());
 }
 
+// calls every frame
 void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 {
 	Super::NativeUpdateAnimation(DeltaTime);
@@ -26,8 +28,34 @@ void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	Velocity.Z = 0.f;
 	Speed = Velocity.Size();
 
+	// charater status
 	bIsInAir = ShooterCharacter->GetCharacterMovement()->IsFalling();
 	bIsAccelerating = ShooterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0.f ? true : false;
+	bWeaponEquipped = ShooterCharacter->IsWeaponEquipped();
+	bIsCrouched = ShooterCharacter->bIsCrouched;
+	bAiming = ShooterCharacter->IsAiming();
 
+	// Offset Yaw for Strafing (variables used are already replicated)
+	// get the controller rotation (global rotation)
+	FRotator AimRotation = ShooterCharacter->GetBaseAimRotation();
+	// direction as paramater, show the rotation of current movement(global rotation)
+	FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(ShooterCharacter->GetVelocity());
+	// The difference between two vector
+	// YawOffset = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation).Yaw;
+	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation);
+	// will pick the shortest path for smoothness
+	DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 6.f);
+	YawOffset = DeltaRotation.Yaw;
+
+	// lean
+	CharacterRotationLastFrame = CharacterRotationCurFrame;
+	// rotation of the root component (capsule rotation)
+	CharacterRotationCurFrame = ShooterCharacter->GetActorRotation();
+	const FRotator Delta = UKismetMathLibrary::NormalizedDeltaRotator(CharacterRotationCurFrame, CharacterRotationLastFrame);
+	// scale Delta up and let it be proportional to Delta time.
+	const float Target = Delta.Yaw / DeltaTime;
+	// to avoid jerkiness, for smooth transaction, interpret lean to target
+	const float Interp = FMath::FInterpTo(Lean, Target, DeltaTime, 6.f);
+	Lean = FMath::Clamp(Interp, -90.f, 90.f);
 }
 

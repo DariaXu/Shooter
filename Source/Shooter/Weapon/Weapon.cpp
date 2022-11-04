@@ -5,6 +5,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Shooter/Character/ShooterCharacter.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values
 AWeapon::AWeapon()
@@ -68,6 +69,41 @@ void AWeapon::Tick(float DeltaTime)
 
 }
 
+void AWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	// replicated variable
+	DOREPLIFETIME(AWeapon, WeaponState);
+}
+
+void AWeapon::SetWeaponState(EWeaponState State)
+{
+	WeaponState = State;
+	// will not copy to the client
+	switch (WeaponState)
+	{
+		case EWeaponState::EWS_Equipped:
+			ShowPickupWidget(false);
+			// only on server
+			AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			break;
+	}
+}
+
+void AWeapon::OnRep_WeaponState()
+{
+	// called when WeaponState changed
+	// for the action that didn't copy to the client
+	switch (WeaponState)
+	{
+		case EWeaponState::EWS_Equipped:
+			ShowPickupWidget(false);
+			// AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			break;
+	}
+}
+
+
 // only get calls on the server
 void AWeapon::OnSphereOverlap(
 		UPrimitiveComponent* OverlappedComponent,
@@ -109,6 +145,3 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 		PickupWidget->SetVisibility(bShowWidget);
 	}
 }
-
-
-

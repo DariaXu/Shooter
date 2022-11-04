@@ -10,7 +10,13 @@
 		}
 	],
 	"settings": {
-		"typescript.tsc.autoDetect": "off"
+		"typescript.tsc.autoDetect": "off",
+		"files.associations": {
+			"*.uplugin": "ini",
+			"future": "cpp",
+			"istream": "cpp",
+			"locale": "cpp"
+		}
 	},
 	"extensions": {
 		"recommendations": [
