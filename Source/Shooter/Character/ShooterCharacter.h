@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Shooter/ShooterTypes/TurningInPlace.h"
 #include "ShooterCharacter.generated.h"
+
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -37,6 +39,7 @@ protected:
 	void CrouchBtnPressed();
 	void AimBtnPressed();
 	void AimBtnReleased();
+	void AimOffset(float DeltaTime);
 	
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
@@ -57,7 +60,7 @@ private:
 	class AWeapon* OverlappingWeapon;
 	
 	// this function can only have a parameter with the type that being replicated，
-	// will automaticstore the last replicated variable into the parameter before current replication happen
+	// will automatic store the last replicated variable into the parameter before current replication happen
 	UFUNCTION()
 	void OnRep_OverlappingWeapon(AWeapon* LastWeapon);
 
@@ -72,10 +75,23 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerEquipButtonPressed();
 
+	float AO_Yaw;
+	float AO_Pitch;
+	FRotator StartingAimRotation;
+
+	ETurningInPlace TurningInPlace;
+	void TurnInPlace(float DeltaTime);
+
 public:
 	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients
 	void SetOverlappingWeapon(AWeapon* Weapon);
 
 	bool IsWeaponEquipped();
 	bool IsAiming();
+
+	AWeapon* GetEquippedWeapon();
+
+	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
+	FORCEINLINE float GetAO_Pitch() const { return AO_Pitch; }
+	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
 };

@@ -9,6 +9,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Shooter/Weapon/Weapon.h"
 #include "Shooter/ShooterComponents/CombatComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -37,6 +39,11 @@ AShooterCharacter::AShooterCharacter()
 	Combat->SetIsReplicated(true);
 
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
+
+	// Fix issues collision with camera
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+
+	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 }
 
 // Called when the game starts or when spawned
@@ -50,8 +57,21 @@ void AShooterCharacter::BeginPlay()
 void AShooterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	AimOffset(DeltaTime);
 }
+
+void AShooterCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	if (Combat)
+	{
+		Combat->Character = this;
+	}
+}
+
+//================================================================================
+// Input and Action Setup 
+//================================================================================
 
 // Called to bind functionality to input
 void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -68,15 +88,6 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &AShooterCharacter::CrouchBtnPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &AShooterCharacter::AimBtnPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &AShooterCharacter::AimBtnReleased);
-}
-
-void AShooterCharacter::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-	if (Combat)
-	{
-		Combat->Character = this;
-	}
 }
 
 void AShooterCharacter::MoveForward(float Value)
@@ -155,6 +166,10 @@ void AShooterCharacter::AimBtnReleased()
 	}
 }
 
+//================================================================================
+// RPC
+//================================================================================
+
 // define what happens when the RPC is executed on the server
 void AShooterCharacter::ServerEquipButtonPressed_Implementation()
 {
@@ -165,6 +180,10 @@ void AShooterCharacter::ServerEquipButtonPressed_Implementation()
 	}
 }
 
+//================================================================================
+// Replicate 
+//================================================================================
+
 void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -174,6 +193,10 @@ void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	// (to show the widget only on the client who own this character)
 	DOREPLIFETIME_CONDITION(AShooterCharacter, OverlappingWeapon, COND_OwnerOnly);
 }
+
+//================================================================================
+// Weapon Overlapping for equipment
+//================================================================================
 
 // this function only get calls on the server
 void AShooterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
@@ -212,6 +235,76 @@ void AShooterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 		LastWeapon->ShowPickupWidget(false);
 	}
 }
+
+AWeapon* AShooterCharacter::GetEquippedWeapon()
+{
+	if (Combat == nullptr) return nullptr;
+	return Combat->EquippedWeapon;
+}
+
+//================================================================================
+// Aim Offset
+//================================================================================
+
+void AShooterCharacter::AimOffset(float DeltaTime)
+{
+	// skip if the charater is not currently equipping a weapon
+	if (Combat && Combat->EquippedWeapon == nullptr) return;
+	// calculating speed
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0.f;
+	float Speed = Velocity.Size();
+	bool bIsInAir = GetCharacterMovement()->IsFalling();
+
+	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
+	{
+		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		// The difference between the current yaw and base yaw, the order matters
+		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+		AO_Yaw = DeltaAimRotation.Yaw;
+		bUseControllerRotationYaw = false;
+		TurnInPlace(DeltaTime);
+	}
+
+	if (Speed > 0.f || bIsInAir) // running, or jumping
+	{
+		// store the base aim rotation, FRotator(Pitch, Yaw, Roll);
+		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		// When moving, AO_Yaw need to be set to zero
+		AO_Yaw = 0.f;
+		bUseControllerRotationYaw = true;
+		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	}
+
+	// pitch regardless of running or standing
+	AO_Pitch = GetBaseAimRotation().Pitch;
+
+	// only fix this for the characters that is not locally controlled, 
+	// because this compression issues will only happen when sending packets through the network
+	if (!IsLocallyControlled() && AO_Pitch > 90.f)
+	{
+		// map pitch from [270, 360) to [-90, 0)
+		FVector2D InRange(270.f, 360.f);
+		FVector2D OutRange(-90.f, 0.f);
+		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
+	}
+}
+
+void AShooterCharacter::TurnInPlace(float DeltaTime)
+{
+	if (AO_Yaw > 90.f)
+	{
+		TurningInPlace = ETurningInPlace::ETIP_Right;
+	}
+	else if (AO_Yaw < -90.f)
+	{
+		TurningInPlace = ETurningInPlace::ETIP_Left;
+	}
+}
+
+//================================================================================
+// Get Function for Status 
+//================================================================================
 
 bool AShooterCharacter::IsWeaponEquipped()
 {
