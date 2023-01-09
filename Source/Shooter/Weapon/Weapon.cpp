@@ -6,12 +6,18 @@
 #include "Components/WidgetComponent.h"
 #include "Shooter/Character/ShooterCharacter.h"
 #include "Net/UnrealNetwork.h"
+#include "Animation/AnimationAsset.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Casing.h"
+#include "Engine/SkeletalMeshSocket.h"
 
 // Sets default values
 AWeapon::AWeapon()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
+	// weapon class is replicated, which means it is spawn on the server and propagates to all clients, only the server has authority
+	// if set to false, all machine will have authority (it will spawn on all machine independently)
 	bReplicates = true;
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
@@ -143,5 +149,34 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	if (PickupWidget)
 	{
 		PickupWidget->SetVisibility(bShowWidget);
+	}
+}
+
+void AWeapon::Fire(const FVector& HitTarget)
+{
+	if (FireAnimation)
+	{
+		// playing animation using skelton mesh 
+		// not replicated
+		WeaponMesh->PlayAnimation(FireAnimation, false);
+	}
+
+	if (CasingClass)
+	{
+		const USkeletalMeshSocket* AmmoEjectSocket = WeaponMesh->GetSocketByName(FName("AmmoEject"));
+		if (AmmoEjectSocket)
+		{
+			FTransform SocketTransform = AmmoEjectSocket->GetSocketTransform(WeaponMesh);
+
+			UWorld* World = GetWorld();
+			if (World)
+			{
+				World->SpawnActor<ACasing>(
+					CasingClass,
+					SocketTransform.GetLocation(),
+					SocketTransform.GetRotation().Rotator()
+				);
+			}
+		}
 	}
 }

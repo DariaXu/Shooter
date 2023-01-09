@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "CombatComponent.generated.h"
 
+#define TRACE_LENGTH 80000.f
+
 class AWeapon;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -25,7 +27,7 @@ public:
 
 	void EquipWeapon(AWeapon* WeaponToEquip);
 
-protected:
+protected: // for child class to inherence
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	void SetAiming(bool bIsAiming);
@@ -36,6 +38,20 @@ protected:
 
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
+
+	// Firing 
+	void FireBtnPressed(bool bPressed);
+
+	// server RPC
+	// FVector_NetQuantize a more effective way to send vector through network
+	UFUNCTION(Server, Reliable)
+	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
+
+	// calling netmulticast on sever side will execute on both client and sever (Server broadcasting)
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
+
+	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 
 private:
 	class AShooterCharacter* Character;
@@ -51,5 +67,6 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	float AimWalkSpeed;
-	
+
+	bool bFiredBtnPressed;
 };

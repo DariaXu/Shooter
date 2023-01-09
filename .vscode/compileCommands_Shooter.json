@@ -110,7 +110,27 @@
 		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
 	},
 	{
-		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\ShooterType\\TurningInPlace.h",
+		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\ShooterTypes\\TurningInPlace.h",
+		"command": "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.33.31629\\bin\\HostX64\\x64\\cl.exe\" @\"C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter\\Shooter.214.rsp\"",
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\Weapon\\Projectile.cpp",
+		"command": "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.33.31629\\bin\\HostX64\\x64\\cl.exe\" @\"C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter\\Shooter.214.rsp\"",
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\Weapon\\Projectile.h",
+		"command": "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.33.31629\\bin\\HostX64\\x64\\cl.exe\" @\"C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter\\Shooter.214.rsp\"",
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\Weapon\\ProjectileWeapon.cpp",
+		"command": "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.33.31629\\bin\\HostX64\\x64\\cl.exe\" @\"C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter\\Shooter.214.rsp\"",
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\Source\\Shooter\\Weapon\\ProjectileWeapon.h",
 		"command": "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.33.31629\\bin\\HostX64\\x64\\cl.exe\" @\"C:\\Users\\daria\\Documents\\Unreal Projects\\Shooter\\.vscode\\compileCommands_Shooter\\Shooter.214.rsp\"",
 		"directory": "C:\\Program Files\\Epic Games\\UE_5.0\\Engine\\Source"
 	},

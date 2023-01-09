@@ -8,13 +8,16 @@
 #include "Engine/SkeletalMeshSocket.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 
 // Sets default values for this component's properties
 UCombatComponent::UCombatComponent()
 {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = false;
+	//  true => tick every frame (calling TickComponent)
+	PrimaryComponentTick.bCanEverTick = true;
 
 	BaseWalkSpeed = 600.f;
 	AimWalkSpeed = 450.f;
@@ -107,3 +110,84 @@ void UCombatComponent::ServerSetAiming_Implementation(bool bIsAiming)
 	}
 }
 
+//================================================================================
+// Firing
+//================================================================================
+// will always call on local machine
+void UCombatComponent::FireBtnPressed(bool bPressed)
+{
+	bFiredBtnPressed = bPressed;
+
+	if (bFiredBtnPressed) 
+	{
+		FHitResult HitResult;
+		TraceUnderCrosshairs(HitResult);
+		// calling sever to fire
+		ServerFire(HitResult.ImpactPoint);
+	}
+}
+
+// called from client and executed from the server
+void UCombatComponent::ServerFire_Implementation(const FVector_NetQuantize& TraceHitTarget)
+{
+	MulticastFire(TraceHitTarget);
+}
+
+// called from sever and will execute on both client and sever
+// if called from client, will only execute on client(useless)
+void UCombatComponent::MulticastFire_Implementation(const FVector_NetQuantize& TraceHitTarget)
+{
+	if (EquippedWeapon == nullptr) return;
+	
+	// since bFiredBtnPressed is only set on client side
+	if (Character)
+	{
+		// not replicated
+		Character->PlayFireMontage(bAiming);
+		EquippedWeapon->Fire(TraceHitTarget);
+	}
+}
+
+void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
+{
+	FVector2D ViewportSize;
+	if (GEngine && GEngine->GameViewport)
+	{
+		// get the view port size in screen space
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+	}
+
+	// Cross hair location is the center of the view port
+	FVector2D CrosshairPos(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
+
+	// transfer 2D screen space to 3D world space
+	FVector CrosshairWldPos;
+	FVector CrosshairWldDir;
+	// Regarding the GetPlayerController fuction, for each individual machine, player 0 is who currently playing the game 
+	// the WorldContextObject is any object in this word to give the reference of which word is in
+	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
+		UGameplayStatics::GetPlayerController(this, 0),
+		CrosshairPos, CrosshairWldPos, CrosshairWldDir
+	);
+
+	if (bScreenToWorld) // checking if the transform was successful
+	{
+		FVector Start = CrosshairWldPos;
+		FVector End = Start + CrosshairWldDir * TRACE_LENGTH;
+
+		// performing line trace, ECC_Visibility hit any visible object as the end result
+		GetWorld()->LineTraceSingleByChannel(
+			TraceHitResult,
+			Start,
+			End,
+			ECollisionChannel::ECC_Visibility
+		);
+
+		if (!TraceHitResult.bBlockingHit)
+		{
+			// if nothing gets hit
+			TraceHitResult.ImpactPoint = End;
+		}
+
+	}
+}

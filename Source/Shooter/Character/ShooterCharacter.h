@@ -26,6 +26,8 @@ public:
 	// register variable to be replicated
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	void PlayFireMontage(bool bAiming);
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -40,6 +42,10 @@ protected:
 	void AimBtnPressed();
 	void AimBtnReleased();
 	void AimOffset(float DeltaTime);
+
+	void FireBtnPressed();
+	void FireBtnReleased();
+	virtual void Jump() override;
 	
 private:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
@@ -52,7 +58,7 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UWidgetComponent* OverheadWidget;
 
-	// notify(call) whenever OverlappingWeapon replicate happen
+	// notify(call) whenever OverlappingWeapon replicate happen (when OverlappingWeapon get changed)
 	// replication happens from server to client(one way)
 	// hence, this notification function will only get called on the client side
 	// and only client side will show the pick up widget
@@ -76,11 +82,15 @@ private:
 	void ServerEquipButtonPressed();
 
 	float AO_Yaw;
+	float InterpAO_Yaw;
 	float AO_Pitch;
 	FRotator StartingAimRotation;
 
 	ETurningInPlace TurningInPlace;
 	void TurnInPlace(float DeltaTime);
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	class UAnimMontage* FireWeaponMontage;
 
 public:
 	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients

@@ -11,6 +11,7 @@
 #include "Shooter/ShooterComponents/CombatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "ShooterAnimInstance.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -44,6 +45,11 @@ AShooterCharacter::AShooterCharacter()
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
 
 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	NetUpdateFrequency = 66.f;
+	MinNetUpdateFrequency = 33.f;
+
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f);
+	
 }
 
 // Called when the game starts or when spawned
@@ -78,7 +84,7 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &AShooterCharacter::Jump);
 	PlayerInputComponent->BindAxis("MoveForward", this, &AShooterCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AShooterCharacter::MoveRight);
 	PlayerInputComponent->BindAxis("Turn", this, &AShooterCharacter::Turn);
@@ -88,6 +94,8 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &AShooterCharacter::CrouchBtnPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &AShooterCharacter::AimBtnPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &AShooterCharacter::AimBtnReleased);
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AShooterCharacter::FireBtnPressed);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AShooterCharacter::FireBtnReleased);
 }
 
 void AShooterCharacter::MoveForward(float Value)
@@ -163,6 +171,22 @@ void AShooterCharacter::AimBtnReleased()
 	if (Combat) 
 	{
 		Combat->SetAiming(false);
+	}
+}
+
+void AShooterCharacter::FireBtnPressed()
+{
+	if (Combat)
+	{
+		Combat->FireBtnPressed(true);
+	}
+}
+
+void AShooterCharacter::FireBtnReleased()
+{
+	if (Combat)
+	{
+		Combat->FireBtnPressed(false);
 	}
 }
 
@@ -258,11 +282,17 @@ void AShooterCharacter::AimOffset(float DeltaTime)
 
 	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
 	{
+		// calculating the rotation
 		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		// The difference between the current yaw and base yaw, the order matters
 		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
 		AO_Yaw = DeltaAimRotation.Yaw;
-		bUseControllerRotationYaw = false;
+		if (TurningInPlace == ETurningInPlace::ETIP_NotTurning)
+		{
+			InterpAO_Yaw=AO_Yaw;
+		}
+		bUseControllerRotationYaw = true;
+		// bUseControllerRotationYaw = false;
 		TurnInPlace(DeltaTime);
 	}
 
@@ -290,6 +320,19 @@ void AShooterCharacter::AimOffset(float DeltaTime)
 	}
 }
 
+
+void AShooterCharacter::Jump()
+{
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Super::Jump();
+	}
+}
+
 void AShooterCharacter::TurnInPlace(float DeltaTime)
 {
 	if (AO_Yaw > 90.f)
@@ -300,6 +343,37 @@ void AShooterCharacter::TurnInPlace(float DeltaTime)
 	{
 		TurningInPlace = ETurningInPlace::ETIP_Left;
 	}
+
+	if (TurningInPlace != ETurningInPlace::ETIP_NotTurning) 
+	{
+		// interp down to 0, speed 10
+		InterpAO_Yaw = FMath::FInterpTo(InterpAO_Yaw, 0.f, DeltaTime, 4.f);
+		AO_Yaw = InterpAO_Yaw;
+		// check if turned enough
+		if (FMath::Abs(AO_Yaw) < 15.f)
+		{
+			TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+			// After turned enough, stop and reset the aim rotation
+			StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		}
+	}
+}
+
+void AShooterCharacter::PlayFireMontage(bool bAiming)
+{
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && FireWeaponMontage)
+	{
+		// playing montage animation
+		AnimInstance->Montage_Play(FireWeaponMontage);
+		// Montage section name
+		FName SectionName;
+		SectionName = bAiming ? FName("RifleAim") : FName("RifleHip");
+		AnimInstance->Montage_JumpToSection(SectionName);
+	}
+
 }
 
 //================================================================================
