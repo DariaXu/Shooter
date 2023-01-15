@@ -8,6 +8,8 @@
 #include "Particles/ParticleSystemComponent.h"
 #include "Particles/ParticleSystem.h"
 #include "Sound/SoundCue.h"
+#include "Shooter/Character/ShooterCharacter.h"
+#include "Shooter/Shooter.h"
 
 // Sets default values
 AProjectile::AProjectile()
@@ -27,6 +29,9 @@ AProjectile::AProjectile()
 	// block all channels that are visible (anything block the visibility) and world static objects(such as walls, floor)
 	CollisionBox->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block); 
 	CollisionBox->SetCollisionResponseToChannel(ECollisionChannel::ECC_WorldStatic, ECollisionResponse::ECR_Block);
+
+	// block charater
+	CollisionBox->SetCollisionResponseToChannel(ECC_SkeletalMesh, ECollisionResponse::ECR_Block);
 
 	ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
 	// to keep the bullet rotation aline with the velocity
@@ -60,8 +65,16 @@ void AProjectile::BeginPlay()
 	}	
 }
 
+// will be call only on the server
 void AProjectile::OnHit(UPrimitiveComponent *HitComp, AActor *OtherActor, UPrimitiveComponent *OtherComp, FVector NormalImpulse, const FHitResult &Hit)
 {
+	AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(OtherActor);
+	if (ShooterCharacter)
+	{
+		// UE_LOG(LogTemp, Warning, TEXT("Hit"));
+		ShooterCharacter->MulticastHit();
+	}
+
 	// whenever Destroy is called, the Destroyed function will be called
 	Destroy();
 }

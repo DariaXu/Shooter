@@ -38,6 +38,7 @@ void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	bIsCrouched = ShooterCharacter->bIsCrouched;
 	bAiming = ShooterCharacter->IsAiming();
 	TurningInPlace = ShooterCharacter->GetTurningInPlace();
+	bRotateRootBone = ShooterCharacter->ShouldRotateRootBone();
 
 	// Offset Yaw for Strafing (variables used are already replicated)
 	// get the controller rotation (global rotation)
@@ -75,6 +76,30 @@ void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		ShooterCharacter->GetMesh()->TransformToBoneSpace(FName("hand_r"), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
 		LeftHandTransform.SetLocation(OutPosition);
 		LeftHandTransform.SetRotation(FQuat(OutRotation));
+
+		if (ShooterCharacter->IsLocallyControlled())
+		{
+			bLocallyControlled = true;
+
+			//right hand bone
+			FTransform RightHandTransform = ShooterCharacter->GetMesh()->GetSocketTransform(FName("Hand_R"), ERelativeTransformSpace::RTS_World);
+			// (RightHandTransform.GetLocation() - ShooterCharacter->GetHitTarget()) vector from hit target to right hand transform
+			//  added up will become a vector point backward(opposite direction) from right hand transform
+			FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(RightHandTransform.GetLocation(), RightHandTransform.GetLocation() + (RightHandTransform.GetLocation() - ShooterCharacter->GetHitTarget()));
+			// for smoothing the transaction
+			RightHandRotation = FMath::RInterpTo(RightHandRotation, LookAtRotation, DeltaTime, 40.f);
+
+			// FVector RightHandX(FRotationMatrix(RightHandTransform.GetRotation().Rotator()).GetUnitAxis(EAxis::X));
+			// DrawDebugLine(GetWorld(), RightHandTransform.GetLocation(), ShooterCharacter->GetHitTarget(), FColor::Blue);
+		}
+
+		// showing the different between crosshair and weapon pointing direction
+		// FTransform MuzzleTipTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("MuzzleFlash"), ERelativeTransformSpace::RTS_World);
+		// // get the direction of where the x-axis of the muzzle tip pointing to 
+		// FVector MuzzleX(FRotationMatrix(MuzzleTipTransform.GetRotation().Rotator()).GetUnitAxis(EAxis::X));
+		// DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), MuzzleTipTransform.GetLocation()+MuzzleX*100.f, FColor::Red);
+		// DrawDebugLine(GetWorld(), MuzzleTipTransform.GetLocation(), ShooterCharacter->GetHitTarget(), FColor::Green);
+		
 	}
 }
 

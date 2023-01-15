@@ -13,7 +13,9 @@
 		"typescript.tsc.autoDetect": "off",
 		"files.associations": {
 			"*.uplugin": "ini",
-			"*.rh": "cpp"
+			"*.rh": "cpp",
+			"__config": "cpp",
+			"__nullptr": "cpp"
 		}
 	},
 	"extensions": {

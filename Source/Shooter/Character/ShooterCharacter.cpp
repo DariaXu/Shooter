@@ -12,6 +12,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ShooterAnimInstance.h"
+#include "Shooter/Shooter.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -43,6 +44,11 @@ AShooterCharacter::AShooterCharacter()
 
 	// Fix issues collision with camera
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+	// set it to channel SkeletalMesh
+	GetMesh()->SetCollisionObjectType(ECC_SkeletalMesh);
+	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+	// Set visibility to block for player to hit each other
+	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
 
 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	NetUpdateFrequency = 66.f;
@@ -55,15 +61,30 @@ AShooterCharacter::AShooterCharacter()
 // Called when the game starts or when spawned
 void AShooterCharacter::BeginPlay()
 {
-	Super::BeginPlay();
-	
+	Super::BeginPlay();	
 }
 
 // Called every frame
 void AShooterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	AimOffset(DeltaTime);
+
+	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
+	{
+		// Anything above Simulated Proxy is going to be something that is actively locally controlled or is on the server.
+		// and locally controlled
+		AimOffset(DeltaTime);
+	}
+	else
+	{
+		// make sure get call every .25s tp prevent not calling when the charater is not moving
+		TimeSinceLastMovementReplication += DeltaTime;
+		if (TimeSinceLastMovementReplication > 0.25f) OnRep_ReplicatedMovement();
+		// calculating AO_pitch every frame
+		CalculateAO_Pitch();
+	}
+	
+	HideCameraIfCharacterClose();
 }
 
 void AShooterCharacter::PostInitializeComponents()
@@ -190,6 +211,40 @@ void AShooterCharacter::FireBtnReleased()
 	}
 }
 
+void AShooterCharacter::Jump()
+{
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Super::Jump();
+	}
+}
+
+void AShooterCharacter::HideCameraIfCharacterClose()
+{
+	if (!IsLocallyControlled()) return;
+	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
+	{
+		GetMesh()->SetVisibility(false);
+		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
+		{
+			// set weapon mesh visiblity to false only for the owner
+			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = true;
+		}
+	}
+	else
+	{
+		GetMesh()->SetVisibility(true);
+		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
+		{
+			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = false;
+		}
+	}
+}
+
 //================================================================================
 // RPC
 //================================================================================
@@ -260,28 +315,47 @@ void AShooterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 	}
 }
 
-AWeapon* AShooterCharacter::GetEquippedWeapon()
+//================================================================================
+// Aim Offset and Turning
+//================================================================================
+
+float AShooterCharacter::CalculateSpeed()
 {
-	if (Combat == nullptr) return nullptr;
-	return Combat->EquippedWeapon;
+    FVector Velocity = GetVelocity();
+	Velocity.Z = 0.f;
+	return Velocity.Size();
 }
 
-//================================================================================
-// Aim Offset
-//================================================================================
+void AShooterCharacter::CalculateAO_Pitch()
+{
+	// Update Pitch movement 
+
+	// pitch regardless of running or standing
+	AO_Pitch = GetBaseAimRotation().Pitch;
+
+	// only fix this for the characters that is not locally controlled, 
+	// because this compression issues will only happen when sending packets through the network
+	if (!IsLocallyControlled() && AO_Pitch > 90.f)
+	{
+		// map pitch from [270, 360) to [-90, 0)
+		FVector2D InRange(270.f, 360.f);
+		FVector2D OutRange(-90.f, 0.f);
+		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
+	}
+}
 
 void AShooterCharacter::AimOffset(float DeltaTime)
 {
 	// skip if the charater is not currently equipping a weapon
 	if (Combat && Combat->EquippedWeapon == nullptr) return;
 	// calculating speed
-	FVector Velocity = GetVelocity();
-	Velocity.Z = 0.f;
-	float Speed = Velocity.Size();
+	
 	bool bIsInAir = GetCharacterMovement()->IsFalling();
+	float Speed = CalculateSpeed();
 
 	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
 	{
+		bRotateRootBone = true;
 		// calculating the rotation
 		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		// The difference between the current yaw and base yaw, the order matters
@@ -298,6 +372,7 @@ void AShooterCharacter::AimOffset(float DeltaTime)
 
 	if (Speed > 0.f || bIsInAir) // running, or jumping
 	{
+		bRotateRootBone = false;
 		// store the base aim rotation, FRotator(Pitch, Yaw, Roll);
 		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		// When moving, AO_Yaw need to be set to zero
@@ -306,30 +381,42 @@ void AShooterCharacter::AimOffset(float DeltaTime)
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	}
 
-	// pitch regardless of running or standing
-	AO_Pitch = GetBaseAimRotation().Pitch;
-
-	// only fix this for the characters that is not locally controlled, 
-	// because this compression issues will only happen when sending packets through the network
-	if (!IsLocallyControlled() && AO_Pitch > 90.f)
-	{
-		// map pitch from [270, 360) to [-90, 0)
-		FVector2D InRange(270.f, 360.f);
-		FVector2D OutRange(-90.f, 0.f);
-		AO_Pitch = FMath::GetMappedRangeValueClamped(InRange, OutRange, AO_Pitch);
-	}
+	CalculateAO_Pitch();
 }
 
-
-void AShooterCharacter::Jump()
+void AShooterCharacter::SimProxiesTurn()
 {
-	if (bIsCrouched)
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
+	// because are simulated proxy and not locally controlled, shouldn't rotate the root bone
+	// In other words, if locally controlled either on the server or a client, 
+	// should set this value to true and use the aim offset function only
+	bRotateRootBone = false;
+	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+
+	// when walking, don't turn to avoid sliding
+	float Speed = CalculateSpeed();
+	if (Speed > 0.f) return;
+	
+	ProxyRotationLastFrame = ProxyRotation;
+	ProxyRotation = GetActorRotation();
+	// get the difference between these two (how much rotation from last frame)
+	ProxyYaw = UKismetMathLibrary::NormalizedDeltaRotator(ProxyRotation, ProxyRotationLastFrame).Yaw;
+
+	// UE_LOG(LogTemp, Warning, TEXT("ProxyYaw: %f"), ProxyYaw);
+
+	if (FMath::Abs(ProxyYaw) > TurnThreshold)
 	{
-		UnCrouch();
-	}
-	else
-	{
-		Super::Jump();
+		// if greater than the threshold, will play the animation
+		if (ProxyYaw > TurnThreshold)
+		{
+			// UE_LOG(LogTemp, Warning, TEXT("Sim Turn Right: %f"), ProxyYaw);
+			TurningInPlace = ETurningInPlace::ETIP_Right;
+		}
+		else if (ProxyYaw < -TurnThreshold)
+		{
+			// UE_LOG(LogTemp, Warning, TEXT("Sim Turn Left: %f"), ProxyYaw);
+			TurningInPlace = ETurningInPlace::ETIP_Left;
+		}
 	}
 }
 
@@ -337,10 +424,12 @@ void AShooterCharacter::TurnInPlace(float DeltaTime)
 {
 	if (AO_Yaw > 90.f)
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("TurnInPlace Turn Left: %f"), ProxyYaw);
 		TurningInPlace = ETurningInPlace::ETIP_Right;
 	}
 	else if (AO_Yaw < -90.f)
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("TurnInPlace Turn Left: %f"), ProxyYaw);
 		TurningInPlace = ETurningInPlace::ETIP_Left;
 	}
 
@@ -359,6 +448,39 @@ void AShooterCharacter::TurnInPlace(float DeltaTime)
 	}
 }
 
+void AShooterCharacter::OnRep_ReplicatedMovement()
+{
+	// this will be called every time when the actors movement changes (walk or jump)
+	Super::OnRep_ReplicatedMovement();
+	SimProxiesTurn();
+	
+	// SimProxiesTurn();
+	TimeSinceLastMovementReplication = 0.f;
+}
+
+//================================================================================
+// Hit and Firing
+//================================================================================
+void AShooterCharacter::PlayHitReactMontage()
+{
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	
+	if (AnimInstance && HitReactMontage)
+	{
+		AnimInstance->Montage_Play(HitReactMontage);
+		FName SectionName("FromFront");
+		AnimInstance->Montage_JumpToSection(SectionName);
+	}
+}
+
+void AShooterCharacter::MulticastHit_Implementation()
+{
+	// UE_LOG(LogTemp, Warning, TEXT("MulticastHit"));
+	PlayHitReactMontage();
+}
+
 void AShooterCharacter::PlayFireMontage(bool bAiming)
 {
 	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
@@ -373,7 +495,6 @@ void AShooterCharacter::PlayFireMontage(bool bAiming)
 		SectionName = bAiming ? FName("RifleAim") : FName("RifleHip");
 		AnimInstance->Montage_JumpToSection(SectionName);
 	}
-
 }
 
 //================================================================================
@@ -390,3 +511,14 @@ bool AShooterCharacter::IsAiming()
 	return (Combat && Combat->bAiming);
 }
 
+AWeapon* AShooterCharacter::GetEquippedWeapon()
+{
+	if (Combat == nullptr) return nullptr;
+	return Combat->EquippedWeapon;
+}
+
+FVector AShooterCharacter::GetHitTarget() const
+{
+	if (Combat == nullptr) return FVector();
+    return Combat->HitTarget;
+}

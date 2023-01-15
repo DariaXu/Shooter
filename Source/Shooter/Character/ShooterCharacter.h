@@ -5,11 +5,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Shooter/ShooterTypes/TurningInPlace.h"
+#include "Shooter/Interfaces/CrosshairInteractionInterface.h"
 #include "ShooterCharacter.generated.h"
 
-
 UCLASS()
-class SHOOTER_API AShooterCharacter : public ACharacter
+class SHOOTER_API AShooterCharacter : public ACharacter, public ICrosshairInteractionInterface
 {
 	GENERATED_BODY()
 
@@ -28,6 +28,11 @@ public:
 
 	void PlayFireMontage(bool bAiming);
 
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastHit();
+
+	virtual void OnRep_ReplicatedMovement() override;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -45,6 +50,12 @@ protected:
 
 	void FireBtnPressed();
 	void FireBtnReleased();
+
+	void PlayHitReactMontage();
+
+	void CalculateAO_Pitch();
+	void SimProxiesTurn();
+
 	virtual void Jump() override;
 	
 private:
@@ -92,6 +103,23 @@ private:
 	UPROPERTY(EditAnywhere, Category = Combat)
 	class UAnimMontage* FireWeaponMontage;
 
+	UPROPERTY(EditAnywhere, Category = Combat)
+	class UAnimMontage* HitReactMontage;
+
+	void HideCameraIfCharacterClose();
+
+	// the dist from camera to charater 
+	UPROPERTY(EditAnywhere)
+	float CameraThreshold = 200.f;
+
+	bool bRotateRootBone;
+	float TurnThreshold = 35.0f;
+	FRotator ProxyRotationLastFrame;
+	FRotator ProxyRotation;
+	float ProxyYaw;
+	float TimeSinceLastMovementReplication;
+	float CalculateSpeed();
+
 public:
 	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients
 	void SetOverlappingWeapon(AWeapon* Weapon);
@@ -104,4 +132,9 @@ public:
 	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
 	FORCEINLINE float GetAO_Pitch() const { return AO_Pitch; }
 	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
+	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
+
+	FVector GetHitTarget() const;
 };
+

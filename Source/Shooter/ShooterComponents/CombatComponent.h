@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Shooter/HUD/ShooterHUD.h"
 #include "CombatComponent.generated.h"
 
 #define TRACE_LENGTH 80000.f
@@ -41,6 +42,7 @@ protected: // for child class to inherence
 
 	// Firing 
 	void FireBtnPressed(bool bPressed);
+	void Fire();
 
 	// server RPC
 	// FVector_NetQuantize a more effective way to send vector through network
@@ -53,8 +55,12 @@ protected: // for child class to inherence
 
 	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 
+	void SetHUDCrosshairs(float DeltaTime);
+
 private:
 	class AShooterCharacter* Character;
+	class AShooterPlayerController* Controller;
+	class AShooterHUD* HUD;
 
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;
@@ -69,4 +75,35 @@ private:
 	float AimWalkSpeed;
 
 	bool bFiredBtnPressed;
+
+	// HUD and crosshairs
+	float CrosshairVelocityFactor;
+	float CrosshairInAirFactor;
+	float CrosshairAimFactor;
+	float CrosshairShootingFactor;
+
+	FVector HitTarget;
+
+	FHUDPackage HUDPackage;
+
+	// Aiming and FOV
+	// Field of view when not aiming; set to the camera's base FOV in BeginPlay
+	float DefaultFOV;
+	float CurrentFOV;
+
+	// default value 
+	UPROPERTY(EditAnywhere, Category = Combat)
+	float ZoomedFOV = 30.f;
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	float ZoomInterpSpeed = 20.f;
+
+	void InterpFOV(float DeltaTime);
+
+	// Automatic Fire
+	FTimerHandle FireTimer;
+	bool bCanFire = true;
+
+	void StartFireTimer();
+	void FireTimerFinished();
 };
