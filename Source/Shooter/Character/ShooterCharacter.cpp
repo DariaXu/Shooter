@@ -120,16 +120,16 @@ void AShooterCharacter::Tick(float DeltaTime)
 
 void AShooterCharacter::PollInit()
 {
-	if (ShooterPlayerState != nullptr) return;
-	
-	ShooterPlayerState = GetPlayerState<AShooterPlayerState>();
-	if (ShooterPlayerState)
+	if (ShooterPlayerState == nullptr)
 	{
-		// initialize
-		ShooterPlayerState->AddToScore(0.f);
-		ShooterPlayerState->AddToDefeats(0);
+		ShooterPlayerState = GetPlayerState<AShooterPlayerState>();
+		if (ShooterPlayerState)
+		{
+			// initialize
+			ShooterPlayerState->AddToScore(0.f);
+			ShooterPlayerState->AddToDefeats(0);
+		}
 	}
-	
 }
 
 void AShooterCharacter::PostInitializeComponents()
@@ -359,6 +359,16 @@ void AShooterCharacter::ServerEquipButtonPressed_Implementation()
 	if (Combat) 
 	{
 		Combat->EquipWeapon(OverlappingWeapon);
+	}
+}
+
+void AShooterCharacter::UpdateHUDWeaponAmmo(bool bIfShow)
+{
+	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
+	if (ShooterPlayerController)
+	{
+		ShooterPlayerController->SetHUDWeaponAmmo(0);
+		ShooterPlayerController->ShowHUDWeaponAmmo(false);
 	}
 }
 #pragma endregion
@@ -638,6 +648,7 @@ void AShooterCharacter::MulticastElim_Implementation()
 
 	if (ShooterPlayerController)
 	{
+		UpdateHUDWeaponAmmo(false);
 		// stop firing
 		DisableInput(ShooterPlayerController);
 	}
@@ -659,7 +670,7 @@ void AShooterCharacter::PlayElimMontage()
 		SectionName = IsAiming() ? FName("Ironsights") : FName("Stand");
 
 		int32 SectionIndex = ElimMontage->GetSectionIndex(SectionName);
-		float ElimAnimationDelay = ElimMontage->GetSectionLength(SectionIndex) * .8f;
+		float ElimAnimationDelay = ElimMontage->GetSectionLength(SectionIndex) * .85f;
 
 		GetWorldTimerManager().SetTimer(
 			ElimAnimationTimer,

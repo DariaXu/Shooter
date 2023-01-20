@@ -29,6 +29,9 @@ public:
 	void AddToScore(float ScoreAmount);
 	void AddToDefeats(int32 DefeatsAmount);
 
+	void SetHUDDefeats();
+	void SetHUDScore();
+
 private:
 	// using UPROPERTY() will ensure when uninitialized, the pointer will be a NULL point, 
 	// instead of undefined behavior (chance of storing garbage information in the pointer) 

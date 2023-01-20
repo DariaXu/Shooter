@@ -16,61 +16,34 @@ void AShooterPlayerState::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >
 void AShooterPlayerState::OnRep_Score()
 {
     // will be call only on client
-	Super::OnRep_Score();
-    
-	Character = Character == nullptr ? Cast<AShooterCharacter>(GetPawn()) : Character;
-
-	if ((Character && Character->Controller) || Controller)
-	{
-		Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
-		if (Controller)
-		{
-            UE_LOG(LogTemp, Warning, TEXT("Score Updating on client"));
-			Controller->SetHUDScore(GetScore());
-		}
-	}
+	Super::OnRep_Score();    
+	SetHUDScore();
 }
 
 void AShooterPlayerState::AddToScore(float ScoreAmount)
 {
     // only call this on the server
-
     // only update the score on the server
 	SetScore(GetScore() + ScoreAmount);
-
-	Character = Character == nullptr ? Cast<AShooterCharacter>(GetPawn()) : Character;
-
-	if ((Character && Character->Controller) || Controller)
-	{
-		Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
-		if (Controller)
-		{
-			Controller->SetHUDScore(GetScore());
-		}
-	}
+	SetHUDScore();
 }
 
 void AShooterPlayerState::OnRep_Defeats()
 {
-	Character = Character == nullptr ? Cast<AShooterCharacter>(GetPawn()) : Character;
-	if ((Character && Character->Controller) || Controller)
-	{
-		Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
-		if (Controller)
-		{
-			Controller->SetHUDDefeats(Defeats);
-		}
-	}
+	SetHUDDefeats();
 }
 
 void AShooterPlayerState::AddToDefeats(int32 DefeatsAmount)
 {
 	Defeats += DefeatsAmount;
     // UE_LOG(LogTemp, Warning, TEXT("Defeat:%d"), Defeats);
+	SetHUDDefeats();
+	
+}
 
+void AShooterPlayerState::SetHUDDefeats()
+{
 	Character = Character == nullptr ? Cast<AShooterCharacter>(GetPawn()) : Character;
-
-    // if (!Character->Controller) UE_LOG(LogTemp, Warning, TEXT("Defeat: Not Controller"));
 
 	if ((Character && Character->Controller) || Controller)
 	{
@@ -83,3 +56,16 @@ void AShooterPlayerState::AddToDefeats(int32 DefeatsAmount)
 	}
 }
 
+void AShooterPlayerState::SetHUDScore()
+{
+	Character = Character == nullptr ? Cast<AShooterCharacter>(GetPawn()) : Character;
+
+	if ((Character && Character->Controller) || Controller)
+	{
+		Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+		if (Controller)
+		{
+			Controller->SetHUDScore(GetScore());
+		}
+	}
+}

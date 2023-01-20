@@ -237,6 +237,12 @@ void UCombatComponent::OnRep_EquippedWeapon()
 		}
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 		Character->bUseControllerRotationYaw = true;
+
+		if (Character->Controller || Controller)
+		{
+			Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+			Controller->ShowHUDWeaponAmmo(true);
+		}
 	}
 }
 
@@ -244,6 +250,11 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 {
 	// will be called on server
 	if (Character == nullptr || WeaponToEquip == nullptr) return;
+
+	if (EquippedWeapon)
+	{
+		EquippedWeapon->Dropped();
+	}
 
 	EquippedWeapon = WeaponToEquip;
 	// set to replicated at Weapon class
@@ -261,9 +272,17 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	}
 	// auto replicated
 	EquippedWeapon->SetOwner(Character);
-
+	// take care setting up on the server side
+	EquippedWeapon->SetHUDAmmo();
+	
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bUseControllerRotationYaw = true;
+
+	if (Character->Controller || Controller)
+		{
+			Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+			Controller->ShowHUDWeaponAmmo(true);
+		}
 }
 #pragma endregion
 

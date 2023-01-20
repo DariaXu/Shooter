@@ -33,6 +33,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	void ShowPickupWidget(bool bShowWidget);
 
+	virtual void OnRep_Owner() override;
+	void SetHUDAmmo();
+
 	virtual void Fire(const FVector& HitTarget);
 
 	// Textures for the weapon crosshairs
@@ -110,6 +113,23 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<class ACasing> CasingClass;
+
+	UPROPERTY(EditAnywhere, ReplicatedUsing = OnRep_Ammo)
+	int32 Ammo;
+
+	UFUNCTION()
+	void OnRep_Ammo();
+
+	// subtract one from ammo
+	void SpendRound();
+
+	UPROPERTY(EditAnywhere)
+	int32 MagCapacity;
+
+	UPROPERTY()
+	class AShooterCharacter* ShooterOwnerCharacter;
+	UPROPERTY()
+	class AShooterPlayerController* ShooterOwnerController;
 
 public:
 	void SetWeaponState(EWeaponState State);

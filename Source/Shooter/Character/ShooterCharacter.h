@@ -71,6 +71,8 @@ protected:
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);
 	void UpdateHUDHealth();
 
+	void UpdateHUDWeaponAmmo(bool bIfShow);
+
 	// Poll for any relevant classes and initialize our HUD as soon as they are available
 	void PollInit();
 	

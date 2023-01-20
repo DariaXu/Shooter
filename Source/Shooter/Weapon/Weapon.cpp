@@ -11,6 +11,7 @@
 #include "Casing.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Shooter/PlayerController/ShooterPlayerController.h"
 
 // Sets default values
 AWeapon::AWeapon()
@@ -76,13 +77,40 @@ void AWeapon::Tick(float DeltaTime)
 
 }
 
+void AWeapon::OnRep_Owner()
+{
+	Super::OnRep_Owner();
+	if (Owner == nullptr)
+	{
+		// when dropping weapon, also clear the character and controller pointer on the client
+		ShooterOwnerCharacter = nullptr;
+		ShooterOwnerController = nullptr;
+	}
+	else
+	{
+		// set on client
+		SetHUDAmmo();
+	}
+}
+
+#pragma region Replicate
+//================================================================================
+// Replicate 
+//================================================================================
+
 void AWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	// replicated variable
 	DOREPLIFETIME(AWeapon, WeaponState);
+	DOREPLIFETIME(AWeapon, Ammo);
 }
+#pragma endregion
 
+#pragma region Weapon
+//================================================================================
+// Weapon Pick up
+//================================================================================
 void AWeapon::SetWeaponState(EWeaponState State)
 {
 	WeaponState = State;
@@ -175,6 +203,28 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	}
 }
 
+void AWeapon::Dropped()
+{
+	SetWeaponState(EWeaponState::EWS_Dropped);
+	FDetachmentTransformRules DetachRules(EDetachmentRule::KeepWorld, true);
+	WeaponMesh->DetachFromComponent(DetachRules);
+
+	if (ShooterOwnerController)
+	{
+		ShooterOwnerController->ShowHUDWeaponAmmo(false);
+	}
+	SetOwner(nullptr);
+
+	// clear it on the server side
+	ShooterOwnerCharacter = nullptr;
+	ShooterOwnerController = nullptr;
+}
+#pragma endregion
+
+#pragma region Firing and Ammo
+//================================================================================
+// Firing and Ammo
+//================================================================================
 void AWeapon::Fire(const FVector& HitTarget)
 {
 	if (FireAnimation)
@@ -204,12 +254,33 @@ void AWeapon::Fire(const FVector& HitTarget)
 			}
 		}
 	}
+	SpendRound();
 }
 
-void AWeapon::Dropped()
+
+void AWeapon::OnRep_Ammo()
 {
-	SetWeaponState(EWeaponState::EWS_Dropped);
-	FDetachmentTransformRules DetachRules(EDetachmentRule::KeepWorld, true);
-	WeaponMesh->DetachFromComponent(DetachRules);
-	SetOwner(nullptr);
+	ShooterOwnerCharacter = ShooterOwnerCharacter == nullptr ? Cast<AShooterCharacter>(GetOwner()) : ShooterOwnerCharacter;
+	SetHUDAmmo();
 }
+
+void AWeapon::SpendRound()
+{
+	Ammo-=1;
+	SetHUDAmmo();
+}
+
+void AWeapon::SetHUDAmmo()
+{
+	ShooterOwnerCharacter = ShooterOwnerCharacter == nullptr ? Cast<AShooterCharacter>(GetOwner()) : ShooterOwnerCharacter;
+	if (ShooterOwnerCharacter)
+	{
+		ShooterOwnerController = ShooterOwnerController == nullptr ? Cast<AShooterPlayerController>(ShooterOwnerCharacter->Controller) : ShooterOwnerController;
+		if (ShooterOwnerController)
+		{
+			ShooterOwnerController->SetHUDWeaponAmmo(Ammo);
+		}
+	}
+}
+
+#pragma endregion
