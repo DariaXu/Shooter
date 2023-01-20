@@ -341,13 +341,13 @@ void UCombatComponent::InterpFOV(float DeltaTime)
 //================================================================================
 void UCombatComponent::Fire()
 {
-	if (!bCanFire) return;
+	if (!CanFire()) return;
 
 	// since we are tracing every frame, don't need this trace any more
 	// FHitResult HitResult;
 	// TraceUnderCrosshairs(HitResult);
 
-	bCanFire = false;
+	bCanContinueFire = false;
 	// calling sever to fire
 	ServerFire(HitTarget);
 
@@ -373,12 +373,21 @@ void UCombatComponent::StartFireTimer()
 void UCombatComponent::FireTimerFinished()
 {
 	if (EquippedWeapon == nullptr) return;
-	bCanFire = true;
+	bCanContinueFire = true;
 	// if fire btn still pressed
 	if (bFiredBtnPressed && EquippedWeapon->bAutomatic)
 	{
 		Fire();
 	}
+}
+
+bool UCombatComponent::CanFire()
+{
+    if (EquippedWeapon == nullptr) return false;
+	if (EquippedWeapon->IsAmmoEmpty()) return false;
+	if (!bCanContinueFire) return false;
+
+	return true;
 }
 
 // will always call on local machine

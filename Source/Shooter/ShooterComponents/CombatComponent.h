@@ -120,8 +120,10 @@ private:
 	FVector HitTarget;
 	// Automatic Fire
 	FTimerHandle FireTimer;
-	bool bCanFire = true;
+	bool bCanContinueFire = true;
 
 	void StartFireTimer();
 	void FireTimerFinished();
+
+	bool CanFire();
 };
