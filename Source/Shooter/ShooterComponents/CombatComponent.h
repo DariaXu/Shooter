@@ -31,42 +31,63 @@ public:
 protected: // for child class to inherence
 	// Called when the game starts
 	virtual void BeginPlay() override;
-	void SetAiming(bool bIsAiming);
 
+	/**
+	* Weapon
+	*/
+	UFUNCTION()
+	void OnRep_EquippedWeapon();
+
+	/**
+	* HUD
+	*/
+	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
+	void SetHUDCrosshairs(float DeltaTime);
+
+	/**
+	* Aiming
+	*/
+	void SetAiming(bool bIsAiming);
 	// server RPC, can have input parameter
 	UFUNCTION(Server, Reliable)
 	void ServerSetAiming(bool bIsAiming);
 
-	UFUNCTION()
-	void OnRep_EquippedWeapon();
-
-	// Firing 
+	/**
+	* Firing 
+	*/
 	void FireBtnPressed(bool bPressed);
 	void Fire();
-
 	// server RPC
 	// FVector_NetQuantize a more effective way to send vector through network
 	UFUNCTION(Server, Reliable)
 	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
-
 	// calling netmulticast on sever side will execute on both client and sever (Server broadcasting)
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
-
-	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
-
-	void SetHUDCrosshairs(float DeltaTime);
+	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);	
 
 private:
+	UPROPERTY()
 	class AShooterCharacter* Character;
+	UPROPERTY()
 	class AShooterPlayerController* Controller;
+	UPROPERTY()
 	class AShooterHUD* HUD;
 
+	/**
+	* Weapon
+	*/
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;
 
-	UPROPERTY(Replicated)
-	bool bAiming;
+	/**
+	* HUD and crosshairs
+	*/
+	float CrosshairVelocityFactor;
+	float CrosshairInAirFactor;
+	float CrosshairAimFactor;
+	float CrosshairShootingFactor;
+
+	FHUDPackage HUDPackage;
 
 	UPROPERTY(EditAnywhere)
 	float BaseWalkSpeed;
@@ -74,23 +95,15 @@ private:
 	UPROPERTY(EditAnywhere)
 	float AimWalkSpeed;
 
-	bool bFiredBtnPressed;
-
-	// HUD and crosshairs
-	float CrosshairVelocityFactor;
-	float CrosshairInAirFactor;
-	float CrosshairAimFactor;
-	float CrosshairShootingFactor;
-
-	FVector HitTarget;
-
-	FHUDPackage HUDPackage;
-
+	/**
+	* Aiming
+	*/
+	UPROPERTY(Replicated)
+	bool bAiming;
 	// Aiming and FOV
 	// Field of view when not aiming; set to the camera's base FOV in BeginPlay
 	float DefaultFOV;
 	float CurrentFOV;
-
 	// default value 
 	UPROPERTY(EditAnywhere, Category = Combat)
 	float ZoomedFOV = 30.f;
@@ -100,6 +113,11 @@ private:
 
 	void InterpFOV(float DeltaTime);
 
+	/**
+	* Firing 
+	*/
+	bool bFiredBtnPressed;
+	FVector HitTarget;
 	// Automatic Fire
 	FTimerHandle FireTimer;
 	bool bCanFire = true;

@@ -87,12 +87,27 @@ void AWeapon::SetWeaponState(EWeaponState State)
 {
 	WeaponState = State;
 	// will not copy to the client
+	// Now it will be call on the client from combat onrep_equippedWeapon
 	switch (WeaponState)
 	{
 		case EWeaponState::EWS_Equipped:
 			ShowPickupWidget(false);
 			// only on server
 			AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			// if set to true, will not be able to pickup
+			WeaponMesh->SetSimulatePhysics(false);
+			WeaponMesh->SetEnableGravity(false);
+			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			break;
+		case EWeaponState::EWS_Dropped:
+			if (HasAuthority())
+			{
+				// only do this on the server
+				AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			}
+			WeaponMesh->SetSimulatePhysics(true);
+			WeaponMesh->SetEnableGravity(true);
+			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			break;
 	}
 }
@@ -105,11 +120,18 @@ void AWeapon::OnRep_WeaponState()
 	{
 		case EWeaponState::EWS_Equipped:
 			ShowPickupWidget(false);
-			// AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			// AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);	
+			WeaponMesh->SetSimulatePhysics(false);
+			WeaponMesh->SetEnableGravity(false);
+			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			break;
+		case EWeaponState::EWS_Dropped:
+			WeaponMesh->SetSimulatePhysics(true);
+			WeaponMesh->SetEnableGravity(true);
+			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			break;
 	}
 }
-
 
 // only get calls on the server
 void AWeapon::OnSphereOverlap(
@@ -182,4 +204,12 @@ void AWeapon::Fire(const FVector& HitTarget)
 			}
 		}
 	}
+}
+
+void AWeapon::Dropped()
+{
+	SetWeaponState(EWeaponState::EWS_Dropped);
+	FDetachmentTransformRules DetachRules(EDetachmentRule::KeepWorld, true);
+	WeaponMesh->DetachFromComponent(DetachRules);
+	SetOwner(nullptr);
 }

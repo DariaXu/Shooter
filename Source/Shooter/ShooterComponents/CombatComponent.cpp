@@ -59,6 +59,7 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 }
 
+#pragma region Replicate variable
 //================================================================================
 // Replicate variable
 //================================================================================
@@ -69,7 +70,9 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(UCombatComponent, EquippedWeapon);
 	DOREPLIFETIME(UCombatComponent, bAiming);
 }
+#pragma endregion
 
+#pragma region HUD
 //================================================================================
 // HUD
 //================================================================================
@@ -152,13 +155,86 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 	}
 }
 
+void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
+{
+	FVector2D ViewportSize;
+	if (GEngine && GEngine->GameViewport)
+	{
+		// get the view port size in screen space
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+	}
+
+	// Cross hair location is the center of the view port
+	FVector2D CrosshairPos(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
+
+	// transfer 2D screen space to 3D world space
+	FVector CrosshairWldPos;
+	FVector CrosshairWldDir;
+	// Regarding the GetPlayerController fuction, for each individual machine, player 0 is who currently playing the game 
+	// the WorldContextObject is any object in this word to give the reference of which word is in
+	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
+		UGameplayStatics::GetPlayerController(this, 0),
+		CrosshairPos, CrosshairWldPos, CrosshairWldDir
+	);
+
+	if (bScreenToWorld) // checking if the transform was successful
+	{
+		FVector Start = CrosshairWldPos;
+
+		if (Character)
+		{
+			// moving the start point of the line trace from camera to 100 in front of the character 
+			float DistanceToCharacter = (Character->GetActorLocation() - Start).Size();
+			Start += CrosshairWldDir * (DistanceToCharacter + 100.f);
+		}
+
+		FVector End = Start + CrosshairWldDir * TRACE_LENGTH;
+
+		// performing line trace, ECC_Visibility hit any visible object as the end result
+		GetWorld()->LineTraceSingleByChannel(
+			TraceHitResult,
+			Start,
+			End,
+			ECollisionChannel::ECC_Visibility
+		);
+
+		if (!TraceHitResult.bBlockingHit)
+		{
+			// if nothing gets hit
+			TraceHitResult.ImpactPoint = End;
+		}
+		// check if hit a charater
+		// check if the actor is using the interface 
+		if (TraceHitResult.GetActor() && TraceHitResult.GetActor()->Implements<UCrosshairInteractionInterface>())
+		{
+			HUDPackage.CrosshairsColor = FLinearColor::Red;
+		}
+		else
+		{
+			HUDPackage.CrosshairsColor = FLinearColor::White;
+		}
+	}
+}
+#pragma endregion HUD
+
+#pragma region Weapon
 //================================================================================
 // Equip Weapon
 //================================================================================
 void UCombatComponent::OnRep_EquippedWeapon()
 {
+	// will be called on client
 	if (EquippedWeapon && Character)
 	{
+		// to ensure the physic is properly set before attach actor
+		EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
+
+		const USkeletalMeshSocket* HandSocket = Character->GetMesh()->GetSocketByName(FName("RightHandSocket"));
+		if (HandSocket)
+		{
+			// this action of attaching the actor will propagate to clients
+			HandSocket->AttachActor(EquippedWeapon, Character->GetMesh());
+		}
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 		Character->bUseControllerRotationYaw = true;
 	}
@@ -166,15 +242,21 @@ void UCombatComponent::OnRep_EquippedWeapon()
 
 void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 {
+	// will be called on server
 	if (Character == nullptr || WeaponToEquip == nullptr) return;
 
 	EquippedWeapon = WeaponToEquip;
 	// set to replicated at Weapon class
+	// since this can't ensure the replicate call will be called on the client before the following attach actor replicate call,
+	// (can't ensure setting the weapon physic will execute before attaching actor on the client side)
+	// (if attachActor called before the replicate function, pick up will fail since the enable physic of the weapon is still true)
+	// need to equip the weapon on client as well
 	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 
 	const USkeletalMeshSocket* HandSocket = Character->GetMesh()->GetSocketByName(FName("RightHandSocket"));
 	if (HandSocket)
 	{
+		// this action of attaching the actor will propagate to clients (replicate)
 		HandSocket->AttachActor(EquippedWeapon, Character->GetMesh());
 	}
 	// auto replicated
@@ -183,7 +265,9 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bUseControllerRotationYaw = true;
 }
+#pragma endregion
 
+#pragma region Aiming
 //================================================================================
 // Aiming
 //================================================================================
@@ -230,8 +314,9 @@ void UCombatComponent::InterpFOV(float DeltaTime)
 		Character->GetFollowCamera()->SetFieldOfView(CurrentFOV);
 	}
 }
+#pragma endregion
 
-
+#pragma region Firing
 //================================================================================
 // Firing
 //================================================================================
@@ -308,66 +393,8 @@ void UCombatComponent::MulticastFire_Implementation(const FVector_NetQuantize& T
 		EquippedWeapon->Fire(TraceHitTarget);
 	}
 }
+#pragma endregion
 
-void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
-{
-	FVector2D ViewportSize;
-	if (GEngine && GEngine->GameViewport)
-	{
-		// get the view port size in screen space
-		GEngine->GameViewport->GetViewportSize(ViewportSize);
-	}
 
-	// Cross hair location is the center of the view port
-	FVector2D CrosshairPos(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
-
-	// transfer 2D screen space to 3D world space
-	FVector CrosshairWldPos;
-	FVector CrosshairWldDir;
-	// Regarding the GetPlayerController fuction, for each individual machine, player 0 is who currently playing the game 
-	// the WorldContextObject is any object in this word to give the reference of which word is in
-	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
-		UGameplayStatics::GetPlayerController(this, 0),
-		CrosshairPos, CrosshairWldPos, CrosshairWldDir
-	);
-
-	if (bScreenToWorld) // checking if the transform was successful
-	{
-		FVector Start = CrosshairWldPos;
-
-		if (Character)
-		{
-			// moving the start point of the line trace from camera to 100 in front of the character 
-			float DistanceToCharacter = (Character->GetActorLocation() - Start).Size();
-			Start += CrosshairWldDir * (DistanceToCharacter + 100.f);
-		}
-
-		FVector End = Start + CrosshairWldDir * TRACE_LENGTH;
-
-		// performing line trace, ECC_Visibility hit any visible object as the end result
-		GetWorld()->LineTraceSingleByChannel(
-			TraceHitResult,
-			Start,
-			End,
-			ECollisionChannel::ECC_Visibility
-		);
-
-		if (!TraceHitResult.bBlockingHit)
-		{
-			// if nothing gets hit
-			TraceHitResult.ImpactPoint = End;
-		}
-		// check if hit a charater
-		// check if the actor is using the interface 
-		if (TraceHitResult.GetActor() && TraceHitResult.GetActor()->Implements<UCrosshairInteractionInterface>())
-		{
-			HUDPackage.CrosshairsColor = FLinearColor::Red;
-		}
-		else
-		{
-			HUDPackage.CrosshairsColor = FLinearColor::White;
-		}
-	}
-}
 
 

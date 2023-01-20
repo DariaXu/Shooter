@@ -23,6 +23,7 @@ void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	{
 		ShooterCharacter = Cast<AShooterCharacter>(TryGetPawnOwner());
 	}
+	
 	if (ShooterCharacter == nullptr) return;
 
 	// velocity calculation
@@ -39,6 +40,7 @@ void UShooterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	bAiming = ShooterCharacter->IsAiming();
 	TurningInPlace = ShooterCharacter->GetTurningInPlace();
 	bRotateRootBone = ShooterCharacter->ShouldRotateRootBone();
+	bElimmed = ShooterCharacter->IsElimmed();
 
 	// Offset Yaw for Strafing (variables used are already replicated)
 	// get the controller rotation (global rotation)

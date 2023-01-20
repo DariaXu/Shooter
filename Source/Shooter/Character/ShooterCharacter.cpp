@@ -13,12 +13,22 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "ShooterAnimInstance.h"
 #include "Shooter/Shooter.h"
+#include "Shooter/PlayerController/ShooterPlayerController.h"
+#include "Shooter/GameMode/ShooterGameMode.h"
+#include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundCue.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "Shooter/PlayerState/ShooterPlayerState.h"
+
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+
+	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(GetMesh());
@@ -55,13 +65,33 @@ AShooterCharacter::AShooterCharacter()
 	MinNetUpdateFrequency = 33.f;
 
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f);
-	
+
+	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
 }
 
 // Called when the game starts or when spawned
 void AShooterCharacter::BeginPlay()
 {
-	Super::BeginPlay();	
+	Super::BeginPlay();
+
+	UpdateHUDHealth();
+	if (HasAuthority())
+	{
+		// after the projectile hit a character, it will call ApplyDamage from projectile.
+		// Then the actor the projectile hit will be passed in as the parameter, 
+		// and ReceiveDamage will be called with information passed in.
+		OnTakeAnyDamage.AddDynamic(this, &AShooterCharacter::ReceiveDamage);
+	}
+}
+
+void AShooterCharacter::Destroyed()
+{
+	Super::Destroyed();
+
+	if (ElimBotComponent)
+	{
+		ElimBotComponent->DestroyComponent();
+	}
 }
 
 // Called every frame
@@ -85,6 +115,21 @@ void AShooterCharacter::Tick(float DeltaTime)
 	}
 	
 	HideCameraIfCharacterClose();
+	PollInit();
+}
+
+void AShooterCharacter::PollInit()
+{
+	if (ShooterPlayerState != nullptr) return;
+	
+	ShooterPlayerState = GetPlayerState<AShooterPlayerState>();
+	if (ShooterPlayerState)
+	{
+		// initialize
+		ShooterPlayerState->AddToScore(0.f);
+		ShooterPlayerState->AddToDefeats(0);
+	}
+	
 }
 
 void AShooterCharacter::PostInitializeComponents()
@@ -96,6 +141,29 @@ void AShooterCharacter::PostInitializeComponents()
 	}
 }
 
+void AShooterCharacter::HideCameraIfCharacterClose()
+{
+	if (!IsLocallyControlled()) return;
+	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
+	{
+		GetMesh()->SetVisibility(false);
+		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
+		{
+			// set weapon mesh visiblity to false only for the owner
+			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = true;
+		}
+	}
+	else
+	{
+		GetMesh()->SetVisibility(true);
+		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
+		{
+			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = false;
+		}
+	}
+}
+
+#pragma region Input and Action Setup 
 //================================================================================
 // Input and Action Setup 
 //================================================================================
@@ -222,43 +290,9 @@ void AShooterCharacter::Jump()
 		Super::Jump();
 	}
 }
+#pragma endregion
 
-void AShooterCharacter::HideCameraIfCharacterClose()
-{
-	if (!IsLocallyControlled()) return;
-	if ((FollowCamera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
-	{
-		GetMesh()->SetVisibility(false);
-		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
-		{
-			// set weapon mesh visiblity to false only for the owner
-			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = true;
-		}
-	}
-	else
-	{
-		GetMesh()->SetVisibility(true);
-		if (Combat && Combat->EquippedWeapon && Combat->EquippedWeapon->GetWeaponMesh())
-		{
-			Combat->EquippedWeapon->GetWeaponMesh()->bOwnerNoSee = false;
-		}
-	}
-}
-
-//================================================================================
-// RPC
-//================================================================================
-
-// define what happens when the RPC is executed on the server
-void AShooterCharacter::ServerEquipButtonPressed_Implementation()
-{
-	// will only be called on the server
-	if (Combat) 
-	{
-		Combat->EquipWeapon(OverlappingWeapon);
-	}
-}
-
+#pragma region Replicate
 //================================================================================
 // Replicate 
 //================================================================================
@@ -271,12 +305,14 @@ void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	// using CONDITION: OverlappingWeapon will only replicated to the client own this character 
 	// (to show the widget only on the client who own this character)
 	DOREPLIFETIME_CONDITION(AShooterCharacter, OverlappingWeapon, COND_OwnerOnly);
+	DOREPLIFETIME(AShooterCharacter, Health);
 }
+#pragma endregion
 
+#pragma region Weapon
 //================================================================================
 // Weapon Overlapping for equipment
 //================================================================================
-
 // this function only get calls on the server
 void AShooterCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 {
@@ -315,6 +351,19 @@ void AShooterCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 	}
 }
 
+// RPC
+// define what happens when the RPC is executed on the server
+void AShooterCharacter::ServerEquipButtonPressed_Implementation()
+{
+	// will only be called on the server
+	if (Combat) 
+	{
+		Combat->EquipWeapon(OverlappingWeapon);
+	}
+}
+#pragma endregion
+
+#pragma region Aim and Turn
 //================================================================================
 // Aim Offset and Turning
 //================================================================================
@@ -458,6 +507,9 @@ void AShooterCharacter::OnRep_ReplicatedMovement()
 	TimeSinceLastMovementReplication = 0.f;
 }
 
+#pragma endregion
+
+#pragma region Hit and Firing
 //================================================================================
 // Hit and Firing
 //================================================================================
@@ -475,11 +527,11 @@ void AShooterCharacter::PlayHitReactMontage()
 	}
 }
 
-void AShooterCharacter::MulticastHit_Implementation()
-{
-	// UE_LOG(LogTemp, Warning, TEXT("MulticastHit"));
-	PlayHitReactMontage();
-}
+// void AShooterCharacter::MulticastHit_Implementation()
+// {
+// 	// UE_LOG(LogTemp, Warning, TEXT("MulticastHit"));
+// 	PlayHitReactMontage();
+// }
 
 void AShooterCharacter::PlayFireMontage(bool bAiming)
 {
@@ -497,6 +549,215 @@ void AShooterCharacter::PlayFireMontage(bool bAiming)
 	}
 }
 
+#pragma endregion
+
+#pragma region Player Health
+void AShooterCharacter::UpdateHUDHealth()
+{
+	// set hud health
+	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
+	if (ShooterPlayerController)
+	{
+		ShooterPlayerController->SetHUDHealth(Health, MaxHealth);
+	}
+}
+
+void AShooterCharacter::OnRep_Health()
+{
+	// OnRep_Health will only be called on clients
+	UpdateHUDHealth();
+	PlayHitReactMontage();
+}
+
+void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const UDamageType *DamageType, AController *InstigatorController, AActor *DamageCauser)
+{
+	// health is replicated, every time it changed, OnRep_Health will be called (which will only be called on client not on sever)
+	// (using variable replication is more efficient than sending an RPC.)
+
+	// clamp will never go below 0 and above maxHealth
+	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
+
+	// ReceiveDamage will only be called on the server, these functions need to be called on client as well
+	UpdateHUDHealth();
+	if (Health > 0.f)
+	{
+		PlayHitReactMontage();
+	}
+
+	// when the play need to be Eliminate
+	if (Health == 0.f)
+	{
+		AShooterGameMode* ShooterGameMode = GetWorld()->GetAuthGameMode<AShooterGameMode>();
+		if (ShooterGameMode)
+		{
+			ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
+			AShooterPlayerController* AttackerController = Cast<AShooterPlayerController>(InstigatorController);
+			
+			ShooterGameMode->PlayerEliminated(this, ShooterPlayerController, AttackerController);
+		}
+	}
+
+}
+#pragma endregion
+
+#pragma region Player Eliminate and Dissolve effect
+
+void AShooterCharacter::Elim()
+{
+	if (Combat && Combat->EquippedWeapon)
+	{
+		Combat->EquippedWeapon->Dropped();
+	}
+
+	MulticastElim();
+	
+	GetWorldTimerManager().SetTimer(
+		ElimTimer,
+		this,
+		&AShooterCharacter::ElimTimerFinished,
+		ElimDelay
+	);
+
+}
+
+void AShooterCharacter::ElimTimerFinished()
+{
+	AShooterGameMode* ShooterGameMode = GetWorld()->GetAuthGameMode<AShooterGameMode>();
+	if (ShooterGameMode)
+	{
+		ShooterGameMode->RequestRespawn(this, Controller);
+	}
+}
+
+void AShooterCharacter::MulticastElim_Implementation()
+{
+	bElimmed = true;
+	// Disable character movement
+	GetCharacterMovement()->DisableMovement();
+	GetCharacterMovement()->StopMovementImmediately();
+
+	if (ShooterPlayerController)
+	{
+		// stop firing
+		DisableInput(ShooterPlayerController);
+	}
+
+	// Disable collision
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	PlayElimMontage();
+}
+
+void AShooterCharacter::PlayElimMontage()
+{
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	
+	if (AnimInstance && ElimMontage)
+	{
+		FName SectionName;
+		SectionName = IsAiming() ? FName("Ironsights") : FName("Stand");
+
+		int32 SectionIndex = ElimMontage->GetSectionIndex(SectionName);
+		float ElimAnimationDelay = ElimMontage->GetSectionLength(SectionIndex) * .8f;
+
+		GetWorldTimerManager().SetTimer(
+			ElimAnimationTimer,
+			this,
+			&AShooterCharacter::ElimAnimationTimerFinished,
+			ElimAnimationDelay
+		);
+
+		AnimInstance->Montage_Play(ElimMontage);
+		// FName SectionName("Stand");
+		AnimInstance->Montage_JumpToSection(SectionName);
+		
+	}
+}
+
+void AShooterCharacter::ElimAnimationTimerFinished()
+{
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	// if (!HasAuthority()) 
+	// {
+	// 	GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("On client Pause"));
+	// }
+	// else
+	// {
+	// 	GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("On Server Pause"));
+	// }
+	if (AnimInstance && ElimMontage && AnimInstance->Montage_IsPlaying(ElimMontage))
+	// if (AnimInstance && ElimMontage)
+	{
+		// GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Pause"));
+		AnimInstance->Montage_Pause(ElimMontage);
+	}
+
+	// dissolving
+	if (DissolveMaterialInstance)
+	{
+		// create the dynamic instance
+		DynamicDissolveMaterialInstance = UMaterialInstanceDynamic::Create(DissolveMaterialInstance, this);
+		// 0 as index
+		GetMesh()->SetMaterial(0, DynamicDissolveMaterialInstance);
+		// Set the default, 0.55 as showing the complete material
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), 0.55f);
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Glow"), 200.f);
+	}
+	StartDissolve();
+
+	// Spawn elim bot
+	if (ElimBotEffect)
+	{
+		// 200 unit above the character
+		FVector ElimBotSpawnPoint(GetActorLocation().X-160.f , GetActorLocation().Y+35.f, GetActorLocation().Z + 200.f);
+		ElimBotComponent = UGameplayStatics::SpawnEmitterAtLocation(
+			GetWorld(),
+			ElimBotEffect,
+			ElimBotSpawnPoint,
+			GetActorRotation()
+		);
+	}
+
+	// play elim bot sound
+	if (ElimBotSound)
+	{
+		UGameplayStatics::SpawnSoundAtLocation(
+			this,
+			ElimBotSound,
+			GetActorLocation()
+		);
+	}
+}
+
+void AShooterCharacter::UpdateDissolveMaterial(float DissolveValue)
+{
+	//use then passed float value to update the Dissolve parameter on the material instance
+	if (DynamicDissolveMaterialInstance)
+	{
+		DynamicDissolveMaterialInstance->SetScalarParameterValue(TEXT("Dissolve"), DissolveValue);
+	}
+}
+
+void AShooterCharacter::StartDissolve()
+{
+	// bing the callback
+	DissolveTrack.BindDynamic(this, &AShooterCharacter::UpdateDissolveMaterial);
+	if (DissolveCurve && DissolveTimeline)
+	{
+		// once playing the timeline, it'll start using the curve and call the callback bound to the DissolveTrack
+		// add the curve to the timeline
+		DissolveTimeline->AddInterpFloat(DissolveCurve, DissolveTrack);
+		// start the timeline
+		// As soon as we call start dissolve, it will find the callback to the dissolve track delegate.
+		// And if the dissolve curve is valid, the curve will be added to the timeline and tell the timeline to use the
+		// dissolve track to look for the callback function, to call every frame and pass that output value from the curve.
+		DissolveTimeline->Play();
+	}
+}
+#pragma endregion
+
+#pragma region Getter
 //================================================================================
 // Get Function for Status 
 //================================================================================
@@ -522,3 +783,4 @@ FVector AShooterCharacter::GetHitTarget() const
 	if (Combat == nullptr) return FVector();
     return Combat->HitTarget;
 }
+#pragma endregion

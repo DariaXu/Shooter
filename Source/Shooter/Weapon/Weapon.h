@@ -64,6 +64,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = Combat)
 	bool bAutomatic = true;
 
+	void Dropped();
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

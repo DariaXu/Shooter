@@ -68,12 +68,13 @@ void AProjectile::BeginPlay()
 // will be call only on the server
 void AProjectile::OnHit(UPrimitiveComponent *HitComp, AActor *OtherActor, UPrimitiveComponent *OtherComp, FVector NormalImpulse, const FHitResult &Hit)
 {
-	AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(OtherActor);
-	if (ShooterCharacter)
-	{
-		// UE_LOG(LogTemp, Warning, TEXT("Hit"));
-		ShooterCharacter->MulticastHit();
-	}
+	// Remove this rpc since health is replicated
+	// AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(OtherActor);
+	// if (ShooterCharacter)
+	// {
+	// 	// UE_LOG(LogTemp, Warning, TEXT("Hit"));
+	// 	ShooterCharacter->MulticastHit();
+	// }
 
 	// whenever Destroy is called, the Destroyed function will be called
 	Destroy();
