@@ -21,6 +21,7 @@ public:
 	void SetHUDWeaponAmmo(int32 Ammo);
 
 	void ShowHUDWeaponAmmo(bool bIfShow);
+	void SetHUDCarriedAmmo(int32 Ammo);
 	
 protected:
 	virtual void BeginPlay() override;

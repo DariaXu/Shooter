@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Shooter/HUD/ShooterHUD.h"
+#include "Shooter/Weapon/WeaponTypes.h"
+#include "Shooter/ShooterTypes/CombatState.h"
 #include "CombatComponent.generated.h"
 
 #define TRACE_LENGTH 80000.f
@@ -27,6 +29,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void EquipWeapon(AWeapon* WeaponToEquip);
+	void Reload();
+
+	UFUNCTION(BlueprintCallable)
+	void FinishReloading();
 
 protected: // for child class to inherence
 	// Called when the game starts
@@ -63,7 +69,16 @@ protected: // for child class to inherence
 	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
 	// calling netmulticast on sever side will execute on both client and sever (Server broadcasting)
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);	
+	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
+
+	/**
+	* Reload 
+	*/
+	UFUNCTION(Server, Reliable)
+	void ServerReload();
+	void HandleReload();
+
+	int32 AmountToReload();
 
 private:
 	UPROPERTY()
@@ -72,6 +87,14 @@ private:
 	class AShooterPlayerController* Controller;
 	UPROPERTY()
 	class AShooterHUD* HUD;
+
+	UPROPERTY(ReplicatedUsing = OnRep_CombatState)
+	ECombatState CombatState = ECombatState::ECS_Unoccupied;
+
+	UFUNCTION()
+	void OnRep_CombatState();
+
+	void SetController();
 
 	/**
 	* Weapon
@@ -126,4 +149,27 @@ private:
 	void FireTimerFinished();
 
 	bool CanFire();
+
+	/**
+	* Ammo 
+	*/
+	// Carried ammo for the currently-equipped weapon type
+	UPROPERTY(ReplicatedUsing = OnRep_CarriedAmmo)
+	int32 CarriedAmmo;
+
+	UFUNCTION()
+	void OnRep_CarriedAmmo();
+
+	// key: Ammo type, Value: Amount of carried ammo for that type
+	TMap<EWeaponType, int32> CarriedAmmoMap;
+
+	void InitializeCarriedAmmo();
+
+	UPROPERTY(EditAnywhere)
+	int32 StartingARAmmo = 30;
+	
+	/**
+	* Reload 
+	*/
+	void UpdateAmmoValues();
 };

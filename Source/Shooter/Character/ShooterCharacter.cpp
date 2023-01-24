@@ -20,6 +20,7 @@
 #include "Sound/SoundCue.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Shooter/PlayerState/ShooterPlayerState.h"
+#include "Shooter/Weapon/WeaponTypes.h"
 
 
 // Sets default values
@@ -185,6 +186,7 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &AShooterCharacter::AimBtnReleased);
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AShooterCharacter::FireBtnPressed);
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AShooterCharacter::FireBtnReleased);
+	PlayerInputComponent->BindAction("Reload", IE_Released, this, &AShooterCharacter::ReloadBtnPressed);
 }
 
 void AShooterCharacter::MoveForward(float Value)
@@ -276,6 +278,14 @@ void AShooterCharacter::FireBtnReleased()
 	if (Combat)
 	{
 		Combat->FireBtnPressed(false);
+	}
+}
+
+void AShooterCharacter::ReloadBtnPressed()
+{
+	if (Combat)
+	{
+		Combat->Reload();
 	}
 }
 
@@ -559,6 +569,27 @@ void AShooterCharacter::PlayFireMontage(bool bAiming)
 	}
 }
 
+void AShooterCharacter::PlayReloadMontage()
+{
+	if (Combat == nullptr || Combat->EquippedWeapon == nullptr) return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && ReloadMontage)
+	{
+		// playing montage animation
+		AnimInstance->Montage_Play(ReloadMontage);
+		// Montage section name
+		FName SectionName;
+		switch (Combat->EquippedWeapon->GetWeaponType())
+		{
+			case EWeaponType::EWT_AssaultRifle:
+				SectionName = FName("Rifle");
+				break;
+		}
+		AnimInstance->Montage_JumpToSection(SectionName);
+	}
+}
+
 #pragma endregion
 
 #pragma region Player Health
@@ -793,5 +824,11 @@ FVector AShooterCharacter::GetHitTarget() const
 {
 	if (Combat == nullptr) return FVector();
     return Combat->HitTarget;
+}
+
+ECombatState AShooterCharacter::GetCombatState() const
+{
+	if (Combat == nullptr) return ECombatState::ECS_MAX;
+	return Combat->CombatState;
 }
 #pragma endregion

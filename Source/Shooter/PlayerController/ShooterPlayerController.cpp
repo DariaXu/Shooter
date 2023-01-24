@@ -106,5 +106,21 @@ void AShooterPlayerController::ShowHUDWeaponAmmo(bool bIfShow)
 	{
 		ShooterHUD->CharacterOverlay->WeaponAmmoText->SetVisibility(VisibleState);
 		ShooterHUD->CharacterOverlay->WeaponAmmoAmount->SetVisibility(VisibleState);
+		ShooterHUD->CharacterOverlay->Slash->SetVisibility(VisibleState);
+		ShooterHUD->CharacterOverlay->CarriedAmmoAmount->SetVisibility(VisibleState);
+	}
+}
+
+void AShooterPlayerController::SetHUDCarriedAmmo(int32 Ammo)
+{
+	ShooterHUD = ShooterHUD == nullptr ? Cast<AShooterHUD>(GetHUD()) : ShooterHUD;
+	bool bHUDValid = ShooterHUD && 
+		ShooterHUD->CharacterOverlay && 
+		ShooterHUD->CharacterOverlay->CarriedAmmoAmount;
+
+	if (bHUDValid)
+	{
+		FString AmmoText = FString::Printf(TEXT("%d"), Ammo);
+		ShooterHUD->CharacterOverlay->CarriedAmmoAmount->SetText(FText::FromString(AmmoText));
 	}
 }

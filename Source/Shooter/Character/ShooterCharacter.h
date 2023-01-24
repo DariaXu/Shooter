@@ -7,6 +7,7 @@
 #include "Shooter/ShooterTypes/TurningInPlace.h"
 #include "Shooter/Interfaces/CrosshairInteractionInterface.h"
 #include "Components/TimelineComponent.h"
+#include "Shooter/ShooterTypes/CombatState.h"
 #include "ShooterCharacter.generated.h"
 
 UCLASS()
@@ -29,6 +30,7 @@ public:
 
 	void PlayFireMontage(bool bAiming);
 	void PlayElimMontage();
+	void PlayReloadMontage();
 	// UFUNCTION(NetMulticast, Unreliable)
 	// void MulticastHit();
 
@@ -61,6 +63,8 @@ protected:
 	void FireBtnPressed();
 	void FireBtnReleased();
 
+	void ReloadBtnPressed();
+
 	void PlayHitReactMontage();
 
 	void CalculateAO_Pitch();
@@ -81,7 +85,7 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UWidgetComponent* OverheadWidget;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UCombatComponent* Combat;
 
 	/**
@@ -150,6 +154,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = Combat)
 	class UAnimMontage* ElimMontage;
+
+	UPROPERTY(EditAnywhere, Category = Combat)
+	class UAnimMontage* ReloadMontage;
 
 	/**
 	* Player health
@@ -241,5 +248,6 @@ public:
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
 
 	FVector GetHitTarget() const;
+	ECombatState GetCombatState() const;
 };
 

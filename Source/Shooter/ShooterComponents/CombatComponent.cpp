@@ -13,6 +13,7 @@
 #include "Shooter/PlayerController/ShooterPlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "TimerManager.h"
+#include "Sound/SoundCue.h"
 
 // Sets default values for this component's properties
 UCombatComponent::UCombatComponent()
@@ -40,7 +41,14 @@ void UCombatComponent::BeginPlay()
 			DefaultFOV = Character->GetFollowCamera()->FieldOfView;
 			CurrentFOV = DefaultFOV;
 		}
+
+		if (Character->HasAuthority())
+		{
+			// control by server
+			InitializeCarriedAmmo();
+		}
 	}
+
 }
 
 // Called every frame
@@ -59,6 +67,14 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 }
 
+void UCombatComponent::SetController()
+{
+	if (Character->Controller)
+	{
+		Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+	}
+}
+
 #pragma region Replicate variable
 //================================================================================
 // Replicate variable
@@ -69,6 +85,9 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UCombatComponent, EquippedWeapon);
 	DOREPLIFETIME(UCombatComponent, bAiming);
+	// will only replicate to the owning client
+	DOREPLIFETIME_CONDITION(UCombatComponent, CarriedAmmo, COND_OwnerOnly);
+	DOREPLIFETIME(UCombatComponent, CombatState);
 }
 #pragma endregion
 
@@ -81,7 +100,7 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 {
 	if (Character == nullptr || Character->Controller == nullptr) return;
 
-	Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+	SetController();
 
 	if (Controller)
 	{
@@ -238,11 +257,21 @@ void UCombatComponent::OnRep_EquippedWeapon()
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 		Character->bUseControllerRotationYaw = true;
 
-		if (Character->Controller || Controller)
+		SetController();
+		if (Controller)
 		{
-			Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
+			Controller->SetHUDCarriedAmmo(CarriedAmmo);
 			Controller->ShowHUDWeaponAmmo(true);
 		}
+
+		if (EquippedWeapon->EquipSound)
+		{
+			UGameplayStatics::PlaySoundAtLocation(
+				this,
+				EquippedWeapon->EquipSound,
+				Character->GetActorLocation()
+			);
+		}	
 	}
 }
 
@@ -274,16 +303,40 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	EquippedWeapon->SetOwner(Character);
 	// take care setting up on the server side
 	EquippedWeapon->SetHUDAmmo();
+
+	// set carried ammo
+	if (CarriedAmmoMap.Contains(EquippedWeapon->GetWeaponType()))
+	{
+		CarriedAmmo = CarriedAmmoMap[EquippedWeapon->GetWeaponType()];
+	}
+
+	SetController();
+	if (Controller)
+	{
+		Controller->SetHUDCarriedAmmo(CarriedAmmo);
+		Controller->ShowHUDWeaponAmmo(true);
+	}
 	
+	if (EquippedWeapon->EquipSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			this,
+			EquippedWeapon->EquipSound,
+			Character->GetActorLocation()
+		);
+	}
+
+	// Auto Reload
+	if (EquippedWeapon->IsAmmoEmpty())
+	{
+		Reload();
+	}
+
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bUseControllerRotationYaw = true;
 
-	if (Character->Controller || Controller)
-		{
-			Controller = Controller == nullptr ? Cast<AShooterPlayerController>(Character->Controller) : Controller;
-			Controller->ShowHUDWeaponAmmo(true);
-		}
 }
+
 #pragma endregion
 
 #pragma region Aiming
@@ -379,6 +432,12 @@ void UCombatComponent::FireTimerFinished()
 	{
 		Fire();
 	}
+
+	// Auto Reload
+	if (EquippedWeapon->IsAmmoEmpty())
+	{
+		Reload();
+	}
 }
 
 bool UCombatComponent::CanFire()
@@ -386,7 +445,7 @@ bool UCombatComponent::CanFire()
     if (EquippedWeapon == nullptr) return false;
 	if (EquippedWeapon->IsAmmoEmpty()) return false;
 	if (!bCanContinueFire) return false;
-
+	if (CombatState != ECombatState::ECS_Unoccupied) return false;
 	return true;
 }
 
@@ -414,7 +473,7 @@ void UCombatComponent::MulticastFire_Implementation(const FVector_NetQuantize& T
 	if (EquippedWeapon == nullptr) return;
 	
 	// since bFiredBtnPressed is only set on client side
-	if (Character)
+	if (Character && CombatState == ECombatState::ECS_Unoccupied)
 	{
 		// not replicated
 		Character->PlayFireMontage(bAiming);
@@ -423,6 +482,113 @@ void UCombatComponent::MulticastFire_Implementation(const FVector_NetQuantize& T
 }
 #pragma endregion
 
+#pragma region Ammo and Reload
+void UCombatComponent::InitializeCarriedAmmo()
+{
+	CarriedAmmoMap.Emplace(EWeaponType::EWT_AssaultRifle, StartingARAmmo);
+}
 
+void UCombatComponent::Reload()
+{
+	// check on client
+	if (CarriedAmmo > 0 && CombatState != ECombatState::ECS_Reloading)
+	{
+		// will be execute only on the server
+		ServerReload();
+	}
+}
 
+void UCombatComponent::HandleReload()
+{
+	// what will execute when reloading (on all machine)
+	Character->PlayReloadMontage();
+}
 
+void UCombatComponent::FinishReloading()
+{
+	if (Character == nullptr) return;
+	if (Character->HasAuthority())
+	{
+		CombatState = ECombatState::ECS_Unoccupied;
+		UpdateAmmoValues();
+	}
+	if (bFiredBtnPressed)
+	{
+		// fire button will only be true on the server
+		Fire();
+	}
+}
+
+void UCombatComponent::ServerReload_Implementation()
+{
+	// server RPC
+	if (Character == nullptr || EquippedWeapon == nullptr) return;
+	CombatState = ECombatState::ECS_Reloading;
+	HandleReload();
+}
+
+void UCombatComponent::OnRep_CarriedAmmo()
+{
+	SetController();
+	if (Controller)
+	{
+		Controller->SetHUDCarriedAmmo(CarriedAmmo);
+	}
+}
+
+void UCombatComponent::OnRep_CombatState()
+{
+	// on client
+	switch (CombatState)
+	{
+		case ECombatState::ECS_Reloading:
+			HandleReload();
+			break;
+
+		case ECombatState::ECS_Unoccupied:
+			if (bFiredBtnPressed)
+			{
+				Fire();
+			}
+			break;
+	}
+}
+
+int32 UCombatComponent::AmountToReload()
+{
+    if (EquippedWeapon == nullptr) return 0;
+
+	int32 RoomInMag = EquippedWeapon->GetMagCapacity() - EquippedWeapon->GetAmmo();
+
+	if (CarriedAmmoMap.Contains(EquippedWeapon->GetWeaponType()))
+	{
+		int32 AmountCarried = CarriedAmmoMap[EquippedWeapon->GetWeaponType()];
+		int32 Least = FMath::Min(RoomInMag, AmountCarried);
+		return FMath::Clamp(RoomInMag, 0, Least);
+	}
+
+	// doesn't have any carried ammo for current weapon type
+	return 0;
+}
+
+void UCombatComponent::UpdateAmmoValues()
+{
+	if (Character == nullptr || EquippedWeapon == nullptr) return;
+
+	int32 ReloadAmount = AmountToReload();
+	if (CarriedAmmoMap.Contains(EquippedWeapon->GetWeaponType()))
+	{
+		CarriedAmmoMap[EquippedWeapon->GetWeaponType()] -= ReloadAmount;
+		CarriedAmmo = CarriedAmmoMap[EquippedWeapon->GetWeaponType()];
+	}
+
+	SetController();
+	if (Controller)
+	{
+		// updating on the sever, client HUD will be set when ammo replicate
+		Controller->SetHUDCarriedAmmo(CarriedAmmo);
+	}
+	EquippedWeapon->AddAmmo(ReloadAmount);
+}
+
+#pragma endregion
