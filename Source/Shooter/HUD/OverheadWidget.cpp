@@ -56,6 +56,7 @@ void UOverheadWidget::ShowPlayerNetRole(APawn* InPawn)
 		playerName = "Unknown";
 	}
 
+	playerName = "";
 	SetDisplayText(playerName);
 }
 

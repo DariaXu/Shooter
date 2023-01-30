@@ -21,6 +21,7 @@
 #include "Particles/ParticleSystemComponent.h"
 #include "Shooter/PlayerState/ShooterPlayerState.h"
 #include "Shooter/Weapon/WeaponTypes.h"
+#include "Shooter/GameState/ShooterGameState.h"
 
 
 // Sets default values
@@ -93,6 +94,13 @@ void AShooterCharacter::Destroyed()
 	{
 		ElimBotComponent->DestroyComponent();
 	}
+
+	AShooterGameMode* ShooterGameMode = Cast<AShooterGameMode>(UGameplayStatics::GetGameMode(this));
+	bool bMatchNotInProgress = ShooterGameMode && ShooterGameMode->GetMatchState() != MatchState::InProgress;
+	if (Combat && Combat->EquippedWeapon && bMatchNotInProgress)
+	{
+		Combat->EquippedWeapon->Destroy();
+	}
 }
 
 // Called every frame
@@ -100,21 +108,7 @@ void AShooterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
-	{
-		// Anything above Simulated Proxy is going to be something that is actively locally controlled or is on the server.
-		// and locally controlled
-		AimOffset(DeltaTime);
-	}
-	else
-	{
-		// make sure get call every .25s tp prevent not calling when the charater is not moving
-		TimeSinceLastMovementReplication += DeltaTime;
-		if (TimeSinceLastMovementReplication > 0.25f) OnRep_ReplicatedMovement();
-		// calculating AO_pitch every frame
-		CalculateAO_Pitch();
-	}
-	
+	RotateInPlace(DeltaTime);
 	HideCameraIfCharacterClose();
 	PollInit();
 }
@@ -130,6 +124,31 @@ void AShooterCharacter::PollInit()
 			ShooterPlayerState->AddToScore(0.f);
 			ShooterPlayerState->AddToDefeats(0);
 		}
+	}
+}
+
+void AShooterCharacter::RotateInPlace(float DeltaTime)
+{
+	// if (bDisableGameplay)
+	// {
+	// 	bUseControllerRotationYaw = false;
+	// 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	// 	return;
+	// }
+
+	if (GetLocalRole() > ENetRole::ROLE_SimulatedProxy && IsLocallyControlled())
+	{
+		// Anything above Simulated Proxy is going to be something that is actively locally controlled or is on the server.
+		// and locally controlled
+		AimOffset(DeltaTime);
+	}
+	else
+	{
+		// make sure get call every .25s tp prevent not calling when the charater is not moving
+		TimeSinceLastMovementReplication += DeltaTime;
+		if (TimeSinceLastMovementReplication > 0.25f) OnRep_ReplicatedMovement();
+		// calculating AO_pitch every frame
+		CalculateAO_Pitch();
 	}
 }
 
@@ -191,6 +210,7 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 void AShooterCharacter::MoveForward(float Value)
 {
+	// if (bDisableGameplay) return;
 	if (Controller != nullptr && Value != 0.f)
 	{
 		const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -316,6 +336,7 @@ void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	// (to show the widget only on the client who own this character)
 	DOREPLIFETIME_CONDITION(AShooterCharacter, OverlappingWeapon, COND_OwnerOnly);
 	DOREPLIFETIME(AShooterCharacter, Health);
+	DOREPLIFETIME(AShooterCharacter, bDisableGameplay);
 }
 #pragma endregion
 
@@ -615,6 +636,9 @@ void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const 
 	// health is replicated, every time it changed, OnRep_Health will be called (which will only be called on client not on sever)
 	// (using variable replication is more efficient than sending an RPC.)
 
+	// when at cool down state
+	if(bDisableGameplay) return;
+
 	// clamp will never go below 0 and above maxHealth
 	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
 
@@ -673,9 +697,15 @@ void AShooterCharacter::ElimTimerFinished()
 void AShooterCharacter::MulticastElim_Implementation()
 {
 	bElimmed = true;
+
+	if (Combat)
+	{
+		Combat->FireBtnPressed(false);
+	}
 	// Disable character movement
 	GetCharacterMovement()->DisableMovement();
 	GetCharacterMovement()->StopMovementImmediately();
+	bDisableGameplay = true;
 
 	if (ShooterPlayerController)
 	{

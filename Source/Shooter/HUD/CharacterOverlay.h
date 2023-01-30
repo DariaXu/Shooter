@@ -37,4 +37,7 @@ public:
 	
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Slash;
+
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* MatchCountdownText;
 };

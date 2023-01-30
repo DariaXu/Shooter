@@ -31,6 +31,8 @@ public:
 	void EquipWeapon(AWeapon* WeaponToEquip);
 	void Reload();
 
+	void FireBtnPressed(bool bPressed);
+
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
 
@@ -61,7 +63,6 @@ protected: // for child class to inherence
 	/**
 	* Firing 
 	*/
-	void FireBtnPressed(bool bPressed);
 	void Fire();
 	// server RPC
 	// FVector_NetQuantize a more effective way to send vector through network

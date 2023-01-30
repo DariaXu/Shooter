@@ -41,6 +41,9 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastElim();
 
+	UPROPERTY(Replicated)
+	bool bDisableGameplay = false;
+
 	virtual void Destroyed() override;
 
 protected:
@@ -79,6 +82,7 @@ protected:
 
 	// Poll for any relevant classes and initialize our HUD as soon as they are available
 	void PollInit();
+	void RotateInPlace(float DeltaTime);
 	
 private:
 	//  meta = (AllowPrivateAccess = "true") means the blueprint can access private variable from c++ class
@@ -246,6 +250,8 @@ public:
 	FORCEINLINE bool IsElimmed() const { return bElimmed; }
 	FORCEINLINE float GetHealth() const { return Health; }
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
+	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
+	FORCEINLINE bool GetDisableGameplay() const { return bDisableGameplay; }
 
 	FVector GetHitTarget() const;
 	ECombatState GetCombatState() const;

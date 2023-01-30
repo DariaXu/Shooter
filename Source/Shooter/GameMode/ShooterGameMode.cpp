@@ -1,12 +1,76 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "ShooterGameMode.h"
 #include "Shooter/Character/ShooterCharacter.h"
 #include "Shooter/PlayerController/ShooterPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
 #include "Shooter/PlayerState/ShooterPlayerState.h"
+#include "Shooter/GameState/ShooterGameState.h"
+
+namespace MatchState
+{
+	const FName Cooldown = FName("Cooldown");
+}
+
+AShooterGameMode::AShooterGameMode()
+{
+	// warm up time
+	bDelayedStart = true;
+}
+
+void AShooterGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// the time from launching game to entering the shooter map
+	LevelStartingTime = GetWorld()->GetTimeSeconds();
+}
+
+void AShooterGameMode::OnMatchStateSet()
+{
+	Super::OnMatchStateSet();
+
+	// loop through all player controllers existed in the world
+	for (FConstPlayerControllerIterator Iter = GetWorld()->GetPlayerControllerIterator(); Iter; ++Iter)
+	{
+		AShooterPlayerController* ShooterPlayerController = Cast<AShooterPlayerController>(*Iter);
+		if (ShooterPlayerController)
+		{
+			ShooterPlayerController->OnMatchStateSet(MatchState);
+		}
+	}
+}
+
+void AShooterGameMode::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (MatchState == MatchState::WaitingToStart)
+	{
+		CountdownTime = WarmupTime - (GetWorld()->GetTimeSeconds() - LevelStartingTime);
+		if (CountdownTime <= 0.f)
+		{
+			StartMatch();
+		}
+	}
+	else if (MatchState == MatchState::InProgress)
+	{
+		CountdownTime = WarmupTime + MatchTime - (GetWorld()->GetTimeSeconds() - LevelStartingTime);
+		if (CountdownTime <= 0.f)
+		{
+			SetMatchState(MatchState::Cooldown);
+		}
+	}
+	else if (MatchState == MatchState::Cooldown)
+	{
+		CountdownTime = (WarmupTime + MatchTime + CooldownTime)- (GetWorld()->GetTimeSeconds() - LevelStartingTime);
+		if (CountdownTime <= 0.f)
+		{
+			RestartGame();
+		}
+	}
+}
 
 void AShooterGameMode::PlayerEliminated(AShooterCharacter *ElimmedCharacter, AShooterPlayerController *VictimController, AShooterPlayerController *AttackerController)
 {
@@ -16,9 +80,13 @@ void AShooterGameMode::PlayerEliminated(AShooterCharacter *ElimmedCharacter, ASh
 	AShooterPlayerState* AttackerPlayerState = AttackerController ? Cast<AShooterPlayerState>(AttackerController->PlayerState) : nullptr;
 	AShooterPlayerState* VictimPlayerState = VictimController ? Cast<AShooterPlayerState>(VictimController->PlayerState) : nullptr;
 
+	
 	if (AttackerPlayerState && AttackerPlayerState != VictimPlayerState)
 	{
 		AttackerPlayerState->AddToScore(1.f);
+		AShooterGameState* ShooterGameState = GetGameState<AShooterGameState>();
+		if (ShooterGameState) ShooterGameState->UpdateTopScore(AttackerPlayerState);
+
 	}
 
 	if (VictimPlayerState)
