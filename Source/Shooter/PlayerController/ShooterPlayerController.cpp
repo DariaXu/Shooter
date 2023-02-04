@@ -152,7 +152,7 @@ void AShooterPlayerController::HandleMatchHasStarted()
 	SetShooterHUD();
 	if (ShooterHUD)
 	{
-		ShooterHUD->AddCharacterOverlay();
+		if(ShooterHUD->CharacterOverlay == nullptr) ShooterHUD->AddCharacterOverlay();
 		if (ShooterHUD->Announcement)
 		{
 			ShooterHUD->Announcement->SetVisibility(ESlateVisibility::Hidden);

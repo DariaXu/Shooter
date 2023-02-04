@@ -21,6 +21,7 @@ AWeapon::AWeapon()
 	// weapon class is replicated, which means it is spawn on the server and propagates to all clients, only the server has authority
 	// if set to false, all machine will have authority (it will spawn on all machine independently)
 	bReplicates = true;
+	SetReplicateMovement(true);
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	// WeaponMesh->SetupAttachment(RootComponent);

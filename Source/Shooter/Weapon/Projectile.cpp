@@ -3,7 +3,7 @@
 
 #include "Projectile.h"
 #include "Components/BoxComponent.h"
-#include "GameFramework/ProjectileMovementComponent.h"
+// #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Particles/ParticleSystem.h"
@@ -33,9 +33,10 @@ AProjectile::AProjectile()
 	// block charater
 	CollisionBox->SetCollisionResponseToChannel(ECC_SkeletalMesh, ECollisionResponse::ECR_Block);
 
-	ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
-	// to keep the bullet rotation aline with the velocity
-	ProjectileMovementComponent->bRotationFollowsVelocity = true;
+	// moved to projectile bullet
+	// ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
+	// // to keep the bullet rotation aline with the velocity
+	// ProjectileMovementComponent->bRotationFollowsVelocity = true;
 }
 
 // Called when the game starts or when spawned
@@ -63,6 +64,9 @@ void AProjectile::BeginPlay()
 		// only binding on server, no hit event on clients
 		CollisionBox->OnComponentHit.AddDynamic(this, &AProjectile::OnHit);
 	}	
+
+	// ignoring here is too early 
+	// CollisionBox->IgnoreActorWhenMoving();
 }
 
 // will be call only on the server
