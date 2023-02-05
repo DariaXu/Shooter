@@ -3,13 +3,27 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Weapon.h"
+#include "HitScanWeapon.generated.h"
 
 /**
  * 
  */
-class SHOOTER_API HitScanWeapon
+UCLASS()
+class SHOOTER_API AHitScanWeapon : public AWeapon
 {
+	GENERATED_BODY()
+
 public:
-	HitScanWeapon();
-	~HitScanWeapon();
+	virtual void Fire(const FVector& HitTarget) override;
+
+private:
+	UPROPERTY(EditAnywhere)
+	float Damage = 20.f;
+
+	UPROPERTY(EditAnywhere)
+	class UParticleSystem* ImpactParticles;
+
+	UPROPERTY(EditAnywhere)
+	UParticleSystem* BeamParticles;
 };

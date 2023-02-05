@@ -14,7 +14,8 @@
 		"files.associations": {
 			"*.uplugin": "ini",
 			"__config": "cpp",
-			"__nullptr": "cpp"
+			"__nullptr": "cpp",
+			"random": "cpp"
 		}
 	},
 	"extensions": {
