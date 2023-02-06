@@ -6,6 +6,7 @@
 #include "Shooter/Character/ShooterCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "particles/ParticleSystemComponent.h"
+#include "Sound/SoundCue.h"
 
 void AHitScanWeapon::Fire(const FVector &HitTarget)
 {
@@ -71,21 +72,52 @@ void AHitScanWeapon::Fire(const FVector &HitTarget)
 					);
 				}
 
-				if (BeamParticles)
+				// sound
+				if (HitSound)
 				{
-					// spawn the beam
-					UParticleSystemComponent* Beam = UGameplayStatics::SpawnEmitterAtLocation(
-						World,
-						BeamParticles,
-						SocketTransform // starting point
+					UGameplayStatics::PlaySoundAtLocation(
+						this,
+						HitSound,
+						FireHit.ImpactPoint
 					);
+				}	
+			}
 
-					if (Beam)
-					{
-						Beam->SetVectorParameter(FName("Target"), BeamEnd);
-					}
+			// smoke trail
+			if (BeamParticles)
+			{
+				// spawn the beam
+				UParticleSystemComponent* Beam = UGameplayStatics::SpawnEmitterAtLocation(
+					World,
+					BeamParticles,
+					SocketTransform // starting point
+				);
+
+				if (Beam)
+				{
+					Beam->SetVectorParameter(FName("Target"), BeamEnd);
 				}
 			}
+		}
+
+		// casing
+		if (MuzzleFlash)
+		{
+			UGameplayStatics::SpawnEmitterAtLocation(
+				World,
+				MuzzleFlash,
+				SocketTransform
+			);
+		}
+
+		// fire sound
+		if (FireSound)
+		{
+			UGameplayStatics::PlaySoundAtLocation(
+				this,
+				FireSound,
+				GetActorLocation()
+			);
 		}
 	}
 }
