@@ -345,15 +345,19 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 //================================================================================
 void UCombatComponent::SetAiming(bool bIsAiming)
 {
+	if (Character == nullptr || EquippedWeapon == nullptr) return;
 	// having this statement will avoid client to wait for responds from sever 
 	bAiming = bIsAiming;
 	// since this function is a rpc server function, 
 	// calling this on the client who own this charater, will result in calling this function on the server
 	ServerSetAiming(bIsAiming);
 
-	if (Character) 
+	Character->GetCharacterMovement()->MaxWalkSpeed = bIsAiming? AimWalkSpeed : BaseWalkSpeed;
+	
+	// sniper scope aiming
+	if (Character->IsLocallyControlled() && EquippedWeapon->GetWeaponType() == EWeaponType::EWT_SniperRifle)
 	{
-		Character->GetCharacterMovement()->MaxWalkSpeed = bIsAiming? AimWalkSpeed : BaseWalkSpeed;
+		Character->ShowSniperScopeWidget(bIsAiming);
 	}
 }
 
@@ -490,6 +494,7 @@ void UCombatComponent::InitializeCarriedAmmo()
 	CarriedAmmoMap.Emplace(EWeaponType::EWT_Pistol, StartingPistolAmmo);
 	CarriedAmmoMap.Emplace(EWeaponType::EWT_SubmachineGun, StartingSMGAmmo);
 	CarriedAmmoMap.Emplace(EWeaponType::EWT_Shotgun, StartingShotgunAmmo);
+	CarriedAmmoMap.Emplace(EWeaponType::EWT_SniperRifle, StartingShotgunAmmo);
 }
 
 void UCombatComponent::Reload()
