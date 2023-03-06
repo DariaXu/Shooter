@@ -12,6 +12,7 @@
 #include "Engine/SkeletalMeshSocket.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Shooter/PlayerController/ShooterPlayerController.h"
+#include "Shooter/ShooterComponents/CombatComponent.h"
 
 // Sets default values
 AWeapon::AWeapon()
@@ -33,6 +34,11 @@ AWeapon::AWeapon()
 	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
 	// startup with no collision
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	EnableCustomDepth(true);
+	WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
+	// force refresh
+	WeaponMesh->MarkRenderStateDirty();
 
 	// use to detect overlap with character, for pick up weapon
 	AreaSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AreaSphere"));
@@ -135,6 +141,7 @@ void AWeapon::SetWeaponState(EWeaponState State)
 				WeaponMesh->SetEnableGravity(true);
 				WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
 			}
+			EnableCustomDepth(false);
 			break;
 		case EWeaponState::EWS_Dropped:
 			if (HasAuthority())
@@ -149,13 +156,12 @@ void AWeapon::SetWeaponState(EWeaponState State)
 			WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
 			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+
+			WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
+			WeaponMesh->MarkRenderStateDirty();
+			EnableCustomDepth(true);
 			break;
 	}
-}
-
-bool AWeapon::IsAmmoEmpty()
-{
-    return Ammo <= 0;
 }
 
 void AWeapon::OnRep_WeaponState()
@@ -177,6 +183,7 @@ void AWeapon::OnRep_WeaponState()
 				WeaponMesh->SetEnableGravity(true);
 				WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
 			}
+			EnableCustomDepth(false);
 			break;
 		case EWeaponState::EWS_Dropped:
 			WeaponMesh->SetSimulatePhysics(true);
@@ -186,6 +193,10 @@ void AWeapon::OnRep_WeaponState()
 			WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
 			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+
+			WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
+			WeaponMesh->MarkRenderStateDirty();
+			EnableCustomDepth(true);
 			break;
 	}
 }
@@ -286,10 +297,23 @@ void AWeapon::Fire(const FVector& HitTarget)
 	SpendRound();
 }
 
+bool AWeapon::IsAmmoEmpty()
+{
+    return Ammo <= 0;
+}
+
+bool AWeapon::IsAmmoFull()
+{
+    return Ammo == MagCapacity;
+}
 
 void AWeapon::OnRep_Ammo()
 {
 	ShooterOwnerCharacter = ShooterOwnerCharacter == nullptr ? Cast<AShooterCharacter>(GetOwner()) : ShooterOwnerCharacter;
+	if (ShooterOwnerCharacter && ShooterOwnerCharacter->GetCombat() && IsAmmoFull())
+	{
+		ShooterOwnerCharacter->GetCombat()->JumpToShotgunEnd();
+	}
 	SetHUDAmmo();
 }
 
@@ -319,3 +343,12 @@ void AWeapon::SetHUDAmmo()
 }
 
 #pragma endregion
+
+void AWeapon::EnableCustomDepth(bool bEnable)
+{
+	if (WeaponMesh)
+	{
+		// enable or disable this chanel 
+		WeaponMesh->SetRenderCustomDepth(bEnable);
+	}
+}

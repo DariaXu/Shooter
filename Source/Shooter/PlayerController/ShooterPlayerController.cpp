@@ -59,6 +59,10 @@ void AShooterPlayerController::OnPossess(APawn *InPawn)
 	if (ShooterCharacter)
 	{
 		SetHUDHealth(ShooterCharacter->GetHealth(), ShooterCharacter->GetMaxHealth());
+		if (ShooterCharacter->GetCombat())
+		{
+			SetHUDGrenades(ShooterCharacter->GetCombat()->GetGrenades());
+		}
 	}
 }
 
@@ -74,6 +78,12 @@ void AShooterPlayerController::PollInit()
 			SetHUDHealth(HUDHealth, HUDMaxHealth);
 			SetHUDScore(HUDScore);
 			SetHUDDefeats(HUDDefeats);
+
+			AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(GetPawn());
+			if (ShooterCharacter && ShooterCharacter->GetCombat())
+			{
+				SetHUDGrenades(ShooterCharacter->GetCombat()->GetGrenades());
+			}
 		}
 	}
 }
@@ -338,6 +348,24 @@ void AShooterPlayerController::SetHUDCarriedAmmo(int32 Ammo)
 		ShooterHUD->CharacterOverlay->CarriedAmmoAmount->SetText(FText::FromString(AmmoText));
 	}
 }
+
+void AShooterPlayerController::SetHUDGrenades(int32 Grenades)
+{
+	SetShooterHUD();
+	bool bHUDValid = ShooterHUD &&
+		ShooterHUD->CharacterOverlay &&
+		ShooterHUD->CharacterOverlay->GrenadesText;
+		
+	if (bHUDValid)
+	{
+		FString GrenadesText = FString::Printf(TEXT("%d"), Grenades);
+		ShooterHUD->CharacterOverlay->GrenadesText->SetText(FText::FromString(GrenadesText));
+	}
+	else
+	{
+		HUDGrenades = Grenades;
+	}
+}
 #pragma endregion
 
 #pragma region Countdown HUD
@@ -384,6 +412,7 @@ void AShooterPlayerController::SetHUDAnnouncementCountdown(float CountdownTime)
 		ShooterHUD->Announcement->WarmupTime->SetText(FText::FromString(CountdownText));
 	}
 }
+
 #pragma endregion
 
 #pragma region Time

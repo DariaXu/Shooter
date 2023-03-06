@@ -69,6 +69,10 @@ AShooterCharacter::AShooterCharacter()
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 0.f, 850.f);
 
 	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
+
+	AttachedGrenade = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Attached Grenade"));
+	AttachedGrenade->SetupAttachment(GetMesh(), FName("GrenadeSocket"));
+	AttachedGrenade->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 // Called when the game starts or when spawned
@@ -83,6 +87,11 @@ void AShooterCharacter::BeginPlay()
 		// Then the actor the projectile hit will be passed in as the parameter, 
 		// and ReceiveDamage will be called with information passed in.
 		OnTakeAnyDamage.AddDynamic(this, &AShooterCharacter::ReceiveDamage);
+	}
+
+	if (AttachedGrenade)
+	{
+		AttachedGrenade->SetVisibility(false);
 	}
 }
 
@@ -206,6 +215,7 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AShooterCharacter::FireBtnPressed);
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AShooterCharacter::FireBtnReleased);
 	PlayerInputComponent->BindAction("Reload", IE_Released, this, &AShooterCharacter::ReloadBtnPressed);
+	PlayerInputComponent->BindAction("ThrowGrenade", IE_Pressed, this, &AShooterCharacter::GrenadeBtnPressed);
 }
 
 void AShooterCharacter::MoveForward(float Value)
@@ -298,6 +308,14 @@ void AShooterCharacter::FireBtnReleased()
 	if (Combat)
 	{
 		Combat->FireBtnPressed(false);
+	}
+}
+
+void AShooterCharacter::GrenadeBtnPressed()
+{
+	if (Combat)
+	{
+		Combat->ThrowGrenade();
 	}
 }
 
@@ -550,7 +568,7 @@ void AShooterCharacter::OnRep_ReplicatedMovement()
 
 #pragma endregion
 
-#pragma region Hit and Firing
+#pragma region Hit and Firing Montage
 //================================================================================
 // Hit and Firing
 //================================================================================
@@ -607,22 +625,34 @@ void AShooterCharacter::PlayReloadMontage()
 				SectionName = FName("Rifle");
 				break;
 			case EWeaponType::EWT_RocketLauncher:
-				SectionName = FName("Rifle");
+				SectionName = FName("RocketLauncher");
 				break;
 			case EWeaponType::EWT_Pistol:
-				SectionName = FName("Rifle");
+				SectionName = FName("Pistol");
 				break;
 			case EWeaponType::EWT_SubmachineGun:
-				SectionName = FName("Rifle");
+				SectionName = FName("Pistol");
 				break;
 			case EWeaponType::EWT_Shotgun:
-				SectionName = FName("Rifle");
+				SectionName = FName("Shotgun");
 				break;
 			case EWeaponType::EWT_SniperRifle:
-				SectionName = FName("Rifle");
+				SectionName = FName("SniperRifle");
+				break;
+			case EWeaponType::EWT_GrenadeLauncher:
+				SectionName = FName("GrenadeLauncher");
 				break;
 		}
 		AnimInstance->Montage_JumpToSection(SectionName);
+	}
+}
+
+void AShooterCharacter::PlayThrowGrenadeMontage()
+{
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance && ThrowGrenadeMontage)
+	{
+		AnimInstance->Montage_Play(ThrowGrenadeMontage);
 	}
 }
 
@@ -653,6 +683,7 @@ void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const 
 
 	// when at cool down state
 	if(bDisableGameplay) return;
+	if (bElimmed) return;
 
 	// clamp will never go below 0 and above maxHealth
 	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);

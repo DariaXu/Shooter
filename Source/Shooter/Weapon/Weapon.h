@@ -74,6 +74,11 @@ public:
 	void Dropped();
 	void AddAmmo(int32 AmmoToAdd);
 
+	/** 
+	* Enable or disable custom depth
+	*/
+	void EnableCustomDepth(bool bEnable);
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -150,4 +155,5 @@ public:
 	FORCEINLINE int32 GetMagCapacity() const { return MagCapacity; }
 
 	bool IsAmmoEmpty();
+	bool IsAmmoFull();
 };

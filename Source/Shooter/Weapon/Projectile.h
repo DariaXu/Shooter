@@ -10,8 +10,8 @@ UCLASS()
 class SHOOTER_API AProjectile : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	AProjectile();
 
@@ -23,32 +23,54 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+	void StartDestroyTimer();
+	void DestroyTimerFinished();
+	void SpawnTrailSystem();
+	void ExplodeDamage();
 
-	// callbacks that were binding to these overlap and hit events always need to be Ufunctions 
+	// callbacks that were binding to these overlap and hit events always need to be Ufunctions
 	UFUNCTION()
-	virtual void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+	virtual void OnHit(UPrimitiveComponent *HitComp, AActor *OtherActor, UPrimitiveComponent *OtherComp, FVector NormalImpulse, const FHitResult &Hit);
 
 	UPROPERTY(EditAnywhere)
 	float Damage = 20.f;
 
 	UPROPERTY(EditAnywhere)
-	UParticleSystem* ImpactParticles;
+	UParticleSystem *ImpactParticles;
 
 	UPROPERTY(EditAnywhere)
-	class USoundCue* ImpactSound;
+	class USoundCue *ImpactSound;
 
 	UPROPERTY(EditAnywhere)
-	class UBoxComponent* CollisionBox;
+	class UBoxComponent *CollisionBox;
 
 	UPROPERTY(VisibleAnywhere)
-	class UProjectileMovementComponent* ProjectileMovementComponent;
-	
-private:
+	class UProjectileMovementComponent *ProjectileMovementComponent;
+
 	UPROPERTY(EditAnywhere)
-	class UParticleSystem* Tracer;
+	class UNiagaraSystem *TrailSystem;
 
 	UPROPERTY()
-	class UParticleSystemComponent* TracerComponent;
-	
-	
+	class UNiagaraComponent *TrailSystemComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent *ProjectileMesh;
+
+	UPROPERTY(EditAnywhere)
+	float DamageInnerRadius = 200.f;
+
+	UPROPERTY(EditAnywhere)
+	float DamageOuterRadius = 500.f;
+
+private:
+	UPROPERTY(EditAnywhere)
+	class UParticleSystem *Tracer;
+
+	UPROPERTY()
+	class UParticleSystemComponent *TracerComponent;
+
+	FTimerHandle DestroyTimer;
+
+	UPROPERTY(EditAnywhere)
+	float DestroyTime = 3.f;
 };

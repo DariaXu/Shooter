@@ -26,13 +26,39 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/**
+	* Weapon
+	*/
 	void EquipWeapon(AWeapon* WeaponToEquip);
-	void Reload();
+	void JumpToShotgunEnd();
 
+	/**
+	* Firing 
+	*/
 	void FireBtnPressed(bool bPressed);
 
+	/**
+	* Reload 
+	*/
+	void Reload();
+	
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
+
+	UFUNCTION(BlueprintCallable)
+	void ShotgunShellReload();
+
+	/**
+	* Grenade 
+	*/
+	UFUNCTION(BlueprintCallable)
+	void ThrowGrenadeFinished();
+
+	UFUNCTION(BlueprintCallable)
+	void LaunchGrenade();
+
+	UFUNCTION(Server, Reliable)
+	void ServerLaunchGrenade(const FVector_NetQuantize& Target);
 
 protected: // for child class to inherence
 	// Called when the game starts
@@ -43,6 +69,12 @@ protected: // for child class to inherence
 	*/
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
+
+	void PlayEquipWeaponSound();
+	void DropEquippedWeapon();
+
+	void AttachActorToRightHand(AActor* ActorToAttach);
+	void AttachActorToLeftHand(AActor* ActorToAttach);
 
 	/**
 	* HUD
@@ -70,6 +102,14 @@ protected: // for child class to inherence
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
 
+	void ThrowGrenade();
+
+	UFUNCTION(Server, Reliable)
+	void ServerThrowGrenade();
+
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<class AProjectile> GrenadeClass;
+
 	/**
 	* Reload 
 	*/
@@ -78,6 +118,15 @@ protected: // for child class to inherence
 	void HandleReload();
 
 	int32 AmountToReload();
+	void UpdateCarriedAmmo();
+	void ReloadEmptyWeapon();
+
+	void UpdateShotgunAmmoValues();
+
+	/**
+	* Grenade 
+	*/
+	void ShowAttachedGrenade(bool bShowGrenade);
 
 private:
 	UPROPERTY()
@@ -182,8 +231,29 @@ private:
 	UPROPERTY(EditAnywhere)
 	int32 StartingSniperAmmo = 0;
 	
+	UPROPERTY(EditAnywhere)
+	int32 StartingGrenadeLauncherAmmo = 0;
+
+	/**
+	* Grenades 
+	*/
+	UPROPERTY(ReplicatedUsing = OnRep_Grenades)
+	int32 Grenades = 4;
+
+	UFUNCTION()
+	void OnRep_Grenades();
+
+	UPROPERTY(EditAnywhere)
+	int32 MaxGrenades = 4;
+
+	void UpdateHUDGrenades();
+	
 	/**
 	* Reload 
 	*/
 	void UpdateAmmoValues();
+
+public:
+	FORCEINLINE int32 GetGrenades() const { return Grenades; }
+	
 };

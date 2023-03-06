@@ -10,6 +10,8 @@
 #include "Sound/SoundCue.h"
 #include "Shooter/Character/ShooterCharacter.h"
 #include "Shooter/Shooter.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 // Sets default values
 AProjectile::AProjectile()
@@ -69,21 +71,6 @@ void AProjectile::BeginPlay()
 	// CollisionBox->IgnoreActorWhenMoving();
 }
 
-// will be call only on the server
-void AProjectile::OnHit(UPrimitiveComponent *HitComp, AActor *OtherActor, UPrimitiveComponent *OtherComp, FVector NormalImpulse, const FHitResult &Hit)
-{
-	// Remove this rpc since health is replicated
-	// AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(OtherActor);
-	// if (ShooterCharacter)
-	// {
-	// 	// UE_LOG(LogTemp, Warning, TEXT("Hit"));
-	// 	ShooterCharacter->MulticastHit();
-	// }
-
-	// whenever Destroy is called, the Destroyed function will be called
-	Destroy();
-}
-
 // Called every frame
 void AProjectile::Tick(float DeltaTime)
 {
@@ -103,5 +90,78 @@ void AProjectile::Destroyed()
 	if (ImpactSound)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ImpactSound, GetActorLocation());
+	}
+}
+
+// will be call only on the server
+void AProjectile::OnHit(UPrimitiveComponent *HitComp, AActor *OtherActor, UPrimitiveComponent *OtherComp, FVector NormalImpulse, const FHitResult &Hit)
+{
+	// Remove this rpc since health is replicated
+	// AShooterCharacter* ShooterCharacter = Cast<AShooterCharacter>(OtherActor);
+	// if (ShooterCharacter)
+	// {
+	// 	// UE_LOG(LogTemp, Warning, TEXT("Hit"));
+	// 	ShooterCharacter->MulticastHit();
+	// }
+
+	// whenever Destroy is called, the Destroyed function will be called
+	Destroy();
+}
+
+void AProjectile::StartDestroyTimer()
+{
+	GetWorldTimerManager().SetTimer(
+		DestroyTimer,
+		this,
+		&AProjectile::DestroyTimerFinished,
+		DestroyTime
+	);
+}
+
+void AProjectile::DestroyTimerFinished()
+{
+	Destroy();
+}
+
+void AProjectile::SpawnTrailSystem()
+{
+	if (TrailSystem)
+	{
+		// spawn the niagara
+		TrailSystemComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+			TrailSystem,
+			GetRootComponent(),
+			FName(),
+			GetActorLocation(),
+			GetActorRotation(),
+			EAttachLocation::KeepWorldPosition,
+			false
+		);
+	}
+}
+
+void AProjectile::ExplodeDamage()
+{
+	// return the pawn that own this rocket
+    APawn* FiringPawn = GetInstigator();
+	if (FiringPawn && HasAuthority())
+	{
+		AController* FiringController = FiringPawn->GetController();
+		if (FiringController)
+		{
+			UGameplayStatics::ApplyRadialDamageWithFalloff(
+				this, // World context object
+				Damage, // BaseDamage
+				10.f, // MinimumDamage
+				GetActorLocation(), // Origin
+				DamageInnerRadius, // DamageInnerRadius (the most innermost will receive full damage)
+				DamageOuterRadius, // DamageOuterRadius
+				1.f, // DamageFalloff (linear damage)
+				UDamageType::StaticClass(), // DamageTypeClass
+				TArray<AActor*>(), // IgnoreActors
+				this, // DamageCauser
+				FiringController // InstigatorController
+			);
+		}
 	}
 }

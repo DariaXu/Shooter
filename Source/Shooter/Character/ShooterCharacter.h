@@ -31,6 +31,7 @@ public:
 	void PlayFireMontage(bool bAiming);
 	void PlayElimMontage();
 	void PlayReloadMontage();
+	void PlayThrowGrenadeMontage();
 	// UFUNCTION(NetMulticast, Unreliable)
 	// void MulticastHit();
 
@@ -68,6 +69,7 @@ protected:
 
 	void FireBtnPressed();
 	void FireBtnReleased();
+	void GrenadeBtnPressed();
 
 	void ReloadBtnPressed();
 
@@ -165,6 +167,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = Combat)
 	class UAnimMontage* ReloadMontage;
 
+	UPROPERTY(EditAnywhere, Category = Combat)
+	UAnimMontage* ThrowGrenadeMontage;
+
 	/**
 	* Player health
 	*/
@@ -237,6 +242,13 @@ private:
 	UPROPERTY()
 	class AShooterPlayerState* ShooterPlayerState;
 
+	/** 
+	* Grenade
+	*/
+
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent* AttachedGrenade;
+
 public:
 	// change only when the overlapping weapon changed on the server, once it changed, it will be replicated to all clients
 	void SetOverlappingWeapon(AWeapon* Weapon);
@@ -255,6 +267,8 @@ public:
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
 	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
 	FORCEINLINE bool GetDisableGameplay() const { return bDisableGameplay; }
+	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
+	FORCEINLINE UStaticMeshComponent* GetAttachedGrenade() const { return AttachedGrenade; }
 
 	FVector GetHitTarget() const;
 	ECombatState GetCombatState() const;
