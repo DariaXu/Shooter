@@ -1,3 +1,3 @@
 # Shooter
 
-A multiplayer shooting game developed using UE5.
+A multiplayer shooting game developing using UE5.
