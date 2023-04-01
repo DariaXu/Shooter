@@ -30,8 +30,8 @@ public:
 	* Weapon
 	*/
 	void EquipWeapon(AWeapon* WeaponToEquip);
-	void JumpToShotgunEnd();
-
+	void SwapWeapons();
+	
 	/**
 	* Firing 
 	*/
@@ -45,9 +45,6 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
 
-	UFUNCTION(BlueprintCallable)
-	void ShotgunShellReload();
-
 	/**
 	* Grenade 
 	*/
@@ -60,6 +57,19 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerLaunchGrenade(const FVector_NetQuantize& Target);
 
+	/**
+	* Shotgun
+	*/
+	void JumpToShotgunEnd();
+	
+	UFUNCTION(BlueprintCallable)
+	void ShotgunShellReload();
+
+	/**
+	* Pickups
+	*/
+	void PickupAmmo(EWeaponType WeaponType, int32 AmmoAmount);
+
 protected: // for child class to inherence
 	// Called when the game starts
 	virtual void BeginPlay() override;
@@ -70,11 +80,18 @@ protected: // for child class to inherence
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
 
-	void PlayEquipWeaponSound();
+	UFUNCTION()
+	void OnRep_SecondaryWeapon();
+
+	void PlayEquipWeaponSound(AWeapon* WeaponToEquip);
 	void DropEquippedWeapon();
 
 	void AttachActorToRightHand(AActor* ActorToAttach);
 	void AttachActorToLeftHand(AActor* ActorToAttach);
+	void AttachActorToBackpack(AActor* ActorToAttach);
+
+	void EquipPrimaryWeapon(AWeapon* WeaponToEquip);
+	void EquipSecondaryWeapon(AWeapon* WeaponToEquip);
 
 	/**
 	* HUD
@@ -150,6 +167,9 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;
 
+	UPROPERTY(ReplicatedUsing = OnRep_SecondaryWeapon)
+	AWeapon* SecondaryWeapon;
+
 	/**
 	* HUD and crosshairs
 	*/
@@ -214,6 +234,9 @@ private:
 	void InitializeCarriedAmmo();
 
 	UPROPERTY(EditAnywhere)
+	int32 MaxCarriedAmmo = 500;
+
+	UPROPERTY(EditAnywhere)
 	int32 StartingARAmmo = 30;
 
 	UPROPERTY(EditAnywhere)
@@ -255,5 +278,5 @@ private:
 
 public:
 	FORCEINLINE int32 GetGrenades() const { return Grenades; }
-	
+	bool ShouldSwapWeapons();
 };
