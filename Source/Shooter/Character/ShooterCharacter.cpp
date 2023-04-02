@@ -85,8 +85,11 @@ void AShooterCharacter::BeginPlay()
 	Super::BeginPlay();
 	SpawnDefaultWeapon();
 
+// UE_LOG(LogTemp, Warning, TEXT("Begin play trying to update HUD"));
 	UpdateHUDHealth();
 	UpdateHUDShield();
+	// UE_LOG(LogTemp, Warning, TEXT("Begin play finished to update HUD"));
+
 	if (HasAuthority())
 	{
 		// after the projectile hit a character, it will call ApplyDamage from projectile.
@@ -720,10 +723,12 @@ void AShooterCharacter::PlayThrowGrenadeMontage()
 #pragma region Player Health
 void AShooterCharacter::UpdateHUDHealth()
 {
+	// UE_LOG(LogTemp, Warning, TEXT("Update Health HUD"));
 	// set hud health
 	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
 	if (ShooterPlayerController)
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("Update Health HUD: %f. %f"), Health, MaxHealth);
 		ShooterPlayerController->SetHUDHealth(Health, MaxHealth);
 	}
 }
@@ -744,9 +749,11 @@ void AShooterCharacter::OnRep_Health(float LastHealth)
 #pragma region Player Shield
 void AShooterCharacter::UpdateHUDShield()
 {
+	// UE_LOG(LogTemp, Warning, TEXT("Update Shield HUD"));
 	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
 	if (ShooterPlayerController)
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("Update Shield HUD: %f. %f"), Shield, MaxShield);
 		ShooterPlayerController->SetHUDShield(Shield, MaxShield);
 	}
 }

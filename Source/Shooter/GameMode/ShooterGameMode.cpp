@@ -67,7 +67,19 @@ void AShooterGameMode::Tick(float DeltaTime)
 		CountdownTime = (WarmupTime + MatchTime + CooldownTime)- (GetWorld()->GetTimeSeconds() - LevelStartingTime);
 		if (CountdownTime <= 0.f)
 		{
-			RestartGame();
+			UWorld* World = GetWorld();
+			if (World){
+
+				// if (World->WorldType == EWorldType::PIE || World->WorldType == EWorldType::Editor)
+				// {
+				// 	RestartGame();
+				// }
+				// else
+				// {
+					bUseSeamlessTravel = true;
+					World->ServerTravel(FString("/Game/Maps/ShooterMap?listen"));
+				// }
+			}
 		}
 	}
 }

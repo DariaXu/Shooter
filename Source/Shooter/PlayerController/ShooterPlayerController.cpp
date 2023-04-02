@@ -59,6 +59,7 @@ void AShooterPlayerController::OnPossess(APawn *InPawn)
 	if (ShooterCharacter)
 	{
 		SetHUDHealth(ShooterCharacter->GetHealth(), ShooterCharacter->GetMaxHealth());
+		SetHUDShield(ShooterCharacter->GetShield(), ShooterCharacter->GetMaxShield());
 		if (ShooterCharacter->GetCombat())
 		{
 			SetHUDGrenades(ShooterCharacter->GetCombat()->GetGrenades());
@@ -239,6 +240,7 @@ void AShooterPlayerController::DisplayMatchResult()
 #pragma region Overlay HUD
 void AShooterPlayerController::SetHUDHealth(float Health, float MaxHealth)
 {
+	// UE_LOG(LogTemp, Warning, TEXT("Set Health HUD from controller: %f. %f"), Health, MaxHealth);
     // set if not set yet
 	SetShooterHUD();
 
@@ -261,6 +263,7 @@ void AShooterPlayerController::SetHUDHealth(float Health, float MaxHealth)
 	}
 	else
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("Set Health HUD from controller failed"));
 		bInitializeHealth = true;
 		HUDHealth = Health;
 		HUDMaxHealth = MaxHealth;
@@ -269,6 +272,7 @@ void AShooterPlayerController::SetHUDHealth(float Health, float MaxHealth)
 
 void AShooterPlayerController::SetHUDShield(float Shield, float MaxShield)
 {
+	// UE_LOG(LogTemp, Warning, TEXT("Set Shield HUD from controller: %f. %f"), Shield, MaxShield);
 	SetShooterHUD();
 	bool bHUDValid = ShooterHUD &&
 		ShooterHUD->CharacterOverlay &&
@@ -283,6 +287,7 @@ void AShooterPlayerController::SetHUDShield(float Shield, float MaxShield)
 	}
 	else
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("Set Shield HUD from controller failed"));
 		bInitializeShield = true;
 		HUDShield = Shield;
 		HUDMaxShield = MaxShield;

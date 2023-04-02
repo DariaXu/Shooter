@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Pickup.h"
 #include "PickupSpawnPoint.h"
+#include "Pickup.h"
 
 // Sets default values
 APickupSpawnPoint::APickupSpawnPoint()
