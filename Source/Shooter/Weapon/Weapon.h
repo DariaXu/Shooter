@@ -13,6 +13,7 @@ enum class EWeaponState : uint8
 	// not picked up, UMETA: macro
 	EWS_Initial UMETA(DisplayName = "Initial State"),
 	EWS_Equipped UMETA(DisplayName = "Equipped"),
+	EWS_EquippedSecondary UMETA(DisplayName = "Equipped Secondary"),
 	EWS_Dropped UMETA(DisplayName = "Dropped"),
 
 	// the number of constants actually in this enum
@@ -72,6 +73,8 @@ public:
 	class USoundCue* EquipSound;
 
 	void Dropped();
+	bool bDestroyWeapon = false;
+	
 	void AddAmmo(int32 AmmoToAdd);
 
 	/** 
@@ -82,6 +85,11 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	virtual void OnWeaponStateSet();
+	virtual void OnEquipped();
+	virtual void OnDropped();
+	virtual void OnEquippedSecondary();
 
 	UFUNCTION()
 	virtual void OnSphereOverlap(

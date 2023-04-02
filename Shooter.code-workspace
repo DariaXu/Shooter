@@ -15,7 +15,8 @@
 			"*.uplugin": "ini",
 			"__config": "cpp",
 			"__nullptr": "cpp",
-			"random": "cpp"
+			"random": "cpp",
+			"*.rh": "cpp"
 		}
 	},
 	"extensions": {

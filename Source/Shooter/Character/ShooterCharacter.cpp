@@ -9,6 +9,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Shooter/Weapon/Weapon.h"
 #include "Shooter/ShooterComponents/CombatComponent.h"
+#include "Shooter/ShooterComponents/BuffComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ShooterAnimInstance.h"
@@ -52,6 +53,9 @@ AShooterCharacter::AShooterCharacter()
 	// components don't need to register to replicated, only set the following bool
 	Combat->SetIsReplicated(true);
 
+	Buff = CreateDefaultSubobject<UBuffComponent>(TEXT("BuffComponent"));
+	Buff->SetIsReplicated(true);
+
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 
 	// Fix issues collision with camera
@@ -79,8 +83,13 @@ AShooterCharacter::AShooterCharacter()
 void AShooterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	SpawnDefaultWeapon();
 
+// UE_LOG(LogTemp, Warning, TEXT("Begin play trying to update HUD"));
 	UpdateHUDHealth();
+	UpdateHUDShield();
+	// UE_LOG(LogTemp, Warning, TEXT("Begin play finished to update HUD"));
+
 	if (HasAuthority())
 	{
 		// after the projectile hit a character, it will call ApplyDamage from projectile.
@@ -136,6 +145,21 @@ void AShooterCharacter::PollInit()
 	}
 }
 
+void AShooterCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	if (Combat)
+	{
+		Combat->Character = this;
+	}
+	if (Buff)
+	{
+		Buff->Character = this;
+		Buff->SetInitialSpeeds(GetCharacterMovement()->MaxWalkSpeed, GetCharacterMovement()->MaxWalkSpeedCrouched);
+		Buff->SetInitialJumpVelocity(GetCharacterMovement()->JumpZVelocity);
+	}
+}
+
 void AShooterCharacter::RotateInPlace(float DeltaTime)
 {
 	// if (bDisableGameplay)
@@ -158,15 +182,6 @@ void AShooterCharacter::RotateInPlace(float DeltaTime)
 		if (TimeSinceLastMovementReplication > 0.25f) OnRep_ReplicatedMovement();
 		// calculating AO_pitch every frame
 		CalculateAO_Pitch();
-	}
-}
-
-void AShooterCharacter::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-	if (Combat)
-	{
-		Combat->Character = this;
 	}
 }
 
@@ -253,16 +268,17 @@ void AShooterCharacter::EquipBtnPressed()
 {
 	if (Combat) 
 	{
-		if (HasAuthority())
-		{
-			// on server
-			Combat->EquipWeapon(OverlappingWeapon);
-		}
-		else
-		{
-			// on client send RPC
-			ServerEquipButtonPressed();
-		}
+		// if (HasAuthority())
+		// {
+		// 	// on server
+		// 	Combat->EquipWeapon(OverlappingWeapon);
+		// }
+		// else
+		// {
+		// on client send RPC to make the call on sever
+		// if on sever, will make the call on sever as well
+		ServerEquipButtonPressed();
+		// }
 		
 	}
 }
@@ -354,6 +370,7 @@ void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	// (to show the widget only on the client who own this character)
 	DOREPLIFETIME_CONDITION(AShooterCharacter, OverlappingWeapon, COND_OwnerOnly);
 	DOREPLIFETIME(AShooterCharacter, Health);
+	DOREPLIFETIME(AShooterCharacter, Shield);
 	DOREPLIFETIME(AShooterCharacter, bDisableGameplay);
 }
 #pragma endregion
@@ -407,7 +424,15 @@ void AShooterCharacter::ServerEquipButtonPressed_Implementation()
 	// will only be called on the server
 	if (Combat) 
 	{
-		Combat->EquipWeapon(OverlappingWeapon);
+		// Combat->EquipWeapon(OverlappingWeapon);
+		if (OverlappingWeapon)
+		{
+			Combat->EquipWeapon(OverlappingWeapon);
+		}
+		else if (Combat->ShouldSwapWeapons())
+		{
+			Combat->SwapWeapons();
+		}
 	}
 }
 
@@ -418,6 +443,43 @@ void AShooterCharacter::UpdateHUDWeaponAmmo(bool bIfShow)
 	{
 		ShooterPlayerController->SetHUDWeaponAmmo(0);
 		ShooterPlayerController->ShowHUDWeaponAmmo(false);
+	}
+}
+
+void AShooterCharacter::SpawnDefaultWeapon()
+{
+	// if not on the server, game mode will return null
+	AShooterGameMode* ShooterGameMode = Cast<AShooterGameMode>(UGameplayStatics::GetGameMode(this));
+	UWorld* World = GetWorld();
+	if (ShooterGameMode && World && !bElimmed && DefaultWeaponClass)
+	{
+		AWeapon* StartingWeapon = World->SpawnActor<AWeapon>(DefaultWeaponClass);
+		StartingWeapon->bDestroyWeapon = true;
+		if (Combat)
+		{
+			Combat->EquipWeapon(StartingWeapon);
+		}
+	}
+}
+
+void AShooterCharacter::DropWeapon(AWeapon* Weapon)
+{
+	if (Weapon == nullptr) return;
+	Weapon->Dropped();
+}
+
+void AShooterCharacter::DropWeapons()
+{
+	if (Combat)
+	{
+		if (Combat->EquippedWeapon)
+		{
+			DropWeapon(Combat->EquippedWeapon);
+		}
+		if (Combat->SecondaryWeapon)
+		{
+			DropWeapon(Combat->SecondaryWeapon);
+		}
 	}
 }
 #pragma endregion
@@ -661,21 +723,52 @@ void AShooterCharacter::PlayThrowGrenadeMontage()
 #pragma region Player Health
 void AShooterCharacter::UpdateHUDHealth()
 {
+	// UE_LOG(LogTemp, Warning, TEXT("Update Health HUD"));
 	// set hud health
 	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
 	if (ShooterPlayerController)
 	{
+		// UE_LOG(LogTemp, Warning, TEXT("Update Health HUD: %f. %f"), Health, MaxHealth);
 		ShooterPlayerController->SetHUDHealth(Health, MaxHealth);
 	}
 }
 
-void AShooterCharacter::OnRep_Health()
+void AShooterCharacter::OnRep_Health(float LastHealth)
 {
 	// OnRep_Health will only be called on clients
 	UpdateHUDHealth();
-	PlayHitReactMontage();
+
+	if (Health < LastHealth)
+	{
+		PlayHitReactMontage();
+	}
 }
 
+#pragma endregion
+
+#pragma region Player Shield
+void AShooterCharacter::UpdateHUDShield()
+{
+	// UE_LOG(LogTemp, Warning, TEXT("Update Shield HUD"));
+	ShooterPlayerController = ShooterPlayerController == nullptr ? Cast<AShooterPlayerController>(Controller) : ShooterPlayerController;
+	if (ShooterPlayerController)
+	{
+		// UE_LOG(LogTemp, Warning, TEXT("Update Shield HUD: %f. %f"), Shield, MaxShield);
+		ShooterPlayerController->SetHUDShield(Shield, MaxShield);
+	}
+}
+
+void AShooterCharacter::OnRep_Shield(float LastShield)
+{
+	UpdateHUDShield();
+	if (Shield < LastShield)
+	{
+		PlayHitReactMontage();
+	}
+}
+#pragma endregion
+
+#pragma region Player Damage
 void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const UDamageType *DamageType, AController *InstigatorController, AActor *DamageCauser)
 {
 	// health is replicated, every time it changed, OnRep_Health will be called (which will only be called on client not on sever)
@@ -685,11 +778,24 @@ void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const 
 	if(bDisableGameplay) return;
 	if (bElimmed) return;
 
+	float TempShield = Shield - Damage;
+	if (TempShield < 0.f)
+	{
+		Shield = 0.f; 
+		Health = FMath::Clamp(Health - (-TempShield), 0.f, MaxHealth);
+	}
+	else
+	{
+		Shield = FMath::Clamp(TempShield, 0.f, MaxHealth);;
+	}
+	
 	// clamp will never go below 0 and above maxHealth
-	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
+	// Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
 
 	// ReceiveDamage will only be called on the server, these functions need to be called on client as well
 	UpdateHUDHealth();
+	UpdateHUDShield();
+
 	if (Health > 0.f)
 	{
 		PlayHitReactMontage();
@@ -715,10 +821,7 @@ void AShooterCharacter::ReceiveDamage(AActor *DamagedActor, float Damage, const 
 
 void AShooterCharacter::Elim()
 {
-	if (Combat && Combat->EquippedWeapon)
-	{
-		Combat->EquippedWeapon->Dropped();
-	}
+	DropWeapons();
 
 	MulticastElim();
 	
@@ -728,7 +831,6 @@ void AShooterCharacter::Elim()
 		&AShooterCharacter::ElimTimerFinished,
 		ElimDelay
 	);
-
 }
 
 void AShooterCharacter::ElimTimerFinished()

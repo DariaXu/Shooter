@@ -95,8 +95,13 @@ void AWeapon::OnRep_Owner()
 	}
 	else
 	{
-		// set on client
-		SetHUDAmmo();
+		// when changing owner, if the updated weapon is the current equipped weapon, then update the ammo hud
+		ShooterOwnerCharacter = ShooterOwnerCharacter == nullptr ? Cast<AShooterCharacter>(Owner) : ShooterOwnerCharacter;
+		if (ShooterOwnerCharacter && ShooterOwnerCharacter->GetEquippedWeapon() && ShooterOwnerCharacter->GetEquippedWeapon() == this)
+		{
+			// set on client
+			SetHUDAmmo();
+		}
 	}
 }
 
@@ -123,83 +128,95 @@ void AWeapon::SetWeaponState(EWeaponState State)
 	WeaponState = State;
 	// will not copy to the client
 	// Now it will be call on the client from combat onrep_equippedWeapon
-	switch (WeaponState)
-	{
-		case EWeaponState::EWS_Equipped:
-			ShowPickupWidget(false);
-			// only on server
-			AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			// if set to true, will not be able to pickup
-			WeaponMesh->SetSimulatePhysics(false);
-			WeaponMesh->SetEnableGravity(false);
-			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-			if (WeaponType == EWeaponType::EWT_SubmachineGun)
-			{
-				// for the strap
-				WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-				WeaponMesh->SetEnableGravity(true);
-				WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
-			}
-			EnableCustomDepth(false);
-			break;
-		case EWeaponState::EWS_Dropped:
-			if (HasAuthority())
-			{
-				// only do this on the server
-				AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-			}
-			WeaponMesh->SetSimulatePhysics(true);
-			WeaponMesh->SetEnableGravity(true);
-			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-			WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
-			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
-			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
-
-			WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
-			WeaponMesh->MarkRenderStateDirty();
-			EnableCustomDepth(true);
-			break;
-	}
+	OnWeaponStateSet();
 }
 
 void AWeapon::OnRep_WeaponState()
 {
 	// called when WeaponState changed
 	// for the action that didn't copy to the client
+	OnWeaponStateSet();
+}
+
+void AWeapon::OnWeaponStateSet()
+{
 	switch (WeaponState)
 	{
 		case EWeaponState::EWS_Equipped:
-			ShowPickupWidget(false);
-			// AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);	
-			WeaponMesh->SetSimulatePhysics(false);
-			WeaponMesh->SetEnableGravity(false);
-			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-			if (WeaponType == EWeaponType::EWT_SubmachineGun)
-			{
-				WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-				WeaponMesh->SetEnableGravity(true);
-				WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
-			}
-			EnableCustomDepth(false);
+			OnEquipped();	
+			break;
+		case EWeaponState::EWS_EquippedSecondary:
+			OnEquippedSecondary();
 			break;
 		case EWeaponState::EWS_Dropped:
-			WeaponMesh->SetSimulatePhysics(true);
-			WeaponMesh->SetEnableGravity(true);
-			WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-			WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
-			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
-			WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
-
-			WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
-			WeaponMesh->MarkRenderStateDirty();
-			EnableCustomDepth(true);
+			OnDropped();
 			break;
 	}
 }
+
+void AWeapon::OnEquipped()
+{
+	ShowPickupWidget(false);
+	// only on server
+	AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// if set to true, will not be able to pickup
+	WeaponMesh->SetSimulatePhysics(false);
+	WeaponMesh->SetEnableGravity(false);
+	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	if (WeaponType == EWeaponType::EWT_SubmachineGun)
+	{
+		// for the strap
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		WeaponMesh->SetEnableGravity(true);
+		WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
+	}
+	EnableCustomDepth(false);
+}
+
+void AWeapon::OnEquippedSecondary()
+{
+	ShowPickupWidget(false);
+	AreaSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WeaponMesh->SetSimulatePhysics(false);
+	WeaponMesh->SetEnableGravity(false);
+	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	if (WeaponType == EWeaponType::EWT_SubmachineGun)
+	{
+		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		WeaponMesh->SetEnableGravity(true);
+		WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
+	}
+
+	EnableCustomDepth(true);
+	if (WeaponMesh)
+	{
+		WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_TAN);
+		WeaponMesh->MarkRenderStateDirty();
+	}
+}
+
+void AWeapon::OnDropped()
+{
+	if (HasAuthority())
+	{
+		// only do this on the server
+		AreaSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+	WeaponMesh->SetSimulatePhysics(true);
+	WeaponMesh->SetEnableGravity(true);
+	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
+	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
+
+	WeaponMesh->SetCustomDepthStencilValue(CUSTOM_DEPTH_BLUE);
+	WeaponMesh->MarkRenderStateDirty();
+	EnableCustomDepth(true);
+}
+
 
 // only get calls on the server
 void AWeapon::OnSphereOverlap(
